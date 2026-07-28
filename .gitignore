@@ -29,3 +29,6 @@ amplify/mock-data/
 serverless/
 .vercel/
 .netlify/
+__pycache__/
+*.py[cod]
+validoc-lambda.zip

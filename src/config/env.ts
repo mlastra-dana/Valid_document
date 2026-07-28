@@ -20,7 +20,7 @@ const requiredUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 
 export const env: AppEnv = {
   apiBaseUrl: requiredUrl || "https://api.example.com",
-  useMockApi: readBoolean(import.meta.env.VITE_USE_MOCK_API, true),
+  useMockApi: readBoolean(import.meta.env.VITE_USE_MOCK_API, false),
   appName:
     import.meta.env.VITE_APP_NAME?.trim() ||
     "Portal de Consignación de Documento de Identidad",

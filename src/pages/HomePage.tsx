@@ -12,10 +12,10 @@ export const HomePage = () => (
       message="Accede desde el enlace único enviado por DANAconnect para completar la carga de tu cédula de identidad."
       actions={
         <Link
-          to="/completar-expediente?tomadorId=ABC123&token=demo-token&scenario=success"
+          to="/completar-expediente?tomadorId=ABC123&token=TOKEN_DE_PRUEBA"
           className="rounded-md bg-mercantil-blue px-5 py-3 text-center font-semibold text-white hover:bg-mercantil-navy"
         >
-          Probar modo demo
+          Abrir expediente de prueba
         </Link>
       }
     />

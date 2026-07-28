@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { registerIdentityDocument, validateIdentityDocument } from "../api/documentoApi";
 import { registerExpedienteFailure } from "../api/expedienteApi";
 import { fileToBase64 } from "../lib/base64";
+import { ApiError } from "../types/api";
 import type { Expediente } from "../types/expediente";
 import type {
   AttemptStatus,
@@ -124,6 +125,12 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         setRegistrationResult(registration);
         setStatus("completed");
       } catch (caughtError) {
+        if (caughtError instanceof ApiError && caughtError.code === "MAX_ATTEMPTS_REACHED") {
+          setStatus("max-attempts");
+          setAttempts((current) => ({ ...current, remaining: 0, used: current.maximum }));
+          return;
+        }
+
         setError(caughtError);
         setStatus("service-error");
       }

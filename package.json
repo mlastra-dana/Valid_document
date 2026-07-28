@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lambda:check": "python3 -m py_compile lambda/index.py",
+    "lambda:zip": "cd lambda && zip -r ../validoc-lambda.zip index.py README.md -x '*.DS_Store'",
+    "validate": "npm run typecheck && npm run lint && npm run lambda:check && npm run build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.3.4",

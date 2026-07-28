@@ -28,6 +28,9 @@ El portal recibe `tomadorId` y `token` desde un enlace único, consulta el exped
 - React Router
 - lucide-react
 - ESLint y Prettier
+- AWS Lambda Function URL
+- Amazon Bedrock con modelo Sonnet
+- APIs Data Retrieval y Upload de DANAconnect
 
 ## Requisitos
 
@@ -58,17 +61,19 @@ Copia `.env.example` a `.env.local` para desarrollo:
 
 ```env
 VITE_API_BASE_URL=https://api.example.com
-VITE_USE_MOCK_API=true
+VITE_USE_MOCK_API=false
 VITE_APP_NAME=Portal de Consignación de Documento de Identidad
 VITE_MAX_FILE_SIZE_MB=10
 VITE_REQUEST_TIMEOUT_MS=30000
 ```
 
+En pruebas integradas y producción, `VITE_API_BASE_URL` debe apuntar a la Function URL de la Lambda backend.
+
 No agregues credenciales sensibles al frontend. No deben existir variables como `AWS_SECRET_ACCESS_KEY`, `AWS_ACCESS_KEY_ID`, contraseñas, API keys privadas ni credenciales de DANAconnect.
 
 ## Modo mock
 
-Activa el mock con:
+El proyecto ya no usa mock por defecto. Actívalo solo cuando se quiera desarrollar sin backend:
 
 ```env
 VITE_USE_MOCK_API=true
@@ -100,6 +105,9 @@ npm run build
 npm run lint
 npm run preview
 npm run typecheck
+npm run lambda:check
+npm run lambda:zip
+npm run validate
 ```
 
 ## Estructura del proyecto
@@ -118,6 +126,16 @@ src/
 ```
 
 La interfaz, lógica de negocio, consumo de API, utilidades, tipos y datos simulados están separados para facilitar mantenimiento.
+
+Lambda:
+
+```text
+lambda/
+  index.py
+  README.md
+```
+
+La Lambda queda preparada para desplegarse con Function URL y documenta las variables necesarias para DANAconnect y Bedrock.
 
 ## Contratos de API
 
@@ -162,6 +180,41 @@ Content-Type: application/json
 - El frontend no debe conectarse directamente a DynamoDB, S3, Bedrock ni DANAconnect usando credenciales.
 - Las integraciones deben realizarse mediante API Gateway y Lambda u otro backend controlado.
 
+## Backend Lambda
+
+El backend vive en [lambda/index.py](/Users/marialastra/Documents/Valid_document/lambda/index.py) y está documentado en [lambda/README.md](/Users/marialastra/Documents/Valid_document/lambda/README.md).
+
+Responsabilidades:
+
+- Recibir las rutas REST consumidas por el frontend.
+- Usar el API Data Retrieval de DANAconnect para consultar el tomador.
+- Invocar Amazon Bedrock Sonnet para validar legibilidad, tipo de documento y número detectado.
+- Comparar el número detectado contra el esperado del tomador.
+- Usar el API Upload de DANAconnect para subir la cédula validada.
+- Registrar resultados fallidos para que DANAconnect continúe los refuerzos.
+
+Variables del backend:
+
+```env
+CORS_ORIGIN=https://tu-dominio-amplify.com
+DANA_TOKEN_URL=https://auth.danaconnect.com/oauth/token
+DANA_ACCESS_TOKEN=
+DANA_CLIENT_ID=
+DANA_CLIENT_SECRET=
+DANA_USERNAME=
+DANA_PASSWORD=
+DANA_SCOPE=
+DANA_DATA_RETRIEVAL_URL=https://...
+DANA_API_UPLOAD_URL=https://...
+DANA_RESULT_URL=https://...
+DANA_TIMEOUT_SECONDS=20
+BEDROCK_REGION=us-east-1
+BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
+MAX_FILE_SIZE_BYTES=10485760
+```
+
+La carpeta `lambda/` es la referencia del código que debe estar dentro de AWS Lambda.
+
 ## Integración con DANAconnect
 
 DANAconnect genera el enlace, proporciona `tomadorId`, envía comunicaciones iniciales, recordatorios y refuerzos. El portal informa resultados al backend para que DANAconnect continúe el flujo correspondiente.
@@ -169,6 +222,8 @@ DANAconnect genera el enlace, proporciona `tomadorId`, envía comunicaciones ini
 ## Integración con Document Manager
 
 El endpoint `/documentos-identidad/registrar` representa la integración con API Upload, Document Manager, indexación documental y actualización del expediente.
+
+En este flujo, el API Upload de DANAconnect recibe el documento validado desde la Lambda. Si DANAconnect delega internamente en Document Manager, el portal solo necesita conservar el `documentId` o referencia devuelta por ese servicio.
 
 ## Despliegue en AWS Amplify
 
@@ -204,6 +259,21 @@ Configura en Amplify:
 - `VITE_REQUEST_TIMEOUT_MS`
 
 No configures secretos de AWS ni credenciales privadas en variables `VITE_`.
+
+Para producción:
+
+```env
+VITE_API_BASE_URL=https://abcxyz.lambda-url.us-east-1.on.aws
+VITE_USE_MOCK_API=false
+```
+
+Para probar este demo ya integrado:
+
+1. Desplegar la Lambda con Function URL.
+2. Configurar en la Lambda los endpoints reales de DANAconnect Data Retrieval y API Upload.
+3. Configurar permisos IAM para invocar Bedrock Sonnet.
+4. Configurar en Amplify `VITE_API_BASE_URL` con la Function URL.
+5. Abrir `/completar-expediente?tomadorId=ABC123&token=TOKEN_REAL`.
 
 ## Rewrite para React Router
 
