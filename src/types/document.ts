@@ -57,7 +57,7 @@ export interface DocumentRegistrationResult {
 
 export interface FinalFailurePayload {
   status: "VALIDATION_FAILED";
-  reasonCode: "MAX_ATTEMPTS_REACHED";
+  reasonCode: ValidationReasonCode;
   attemptsUsed: number;
 }
 

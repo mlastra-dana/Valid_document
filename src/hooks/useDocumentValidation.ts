@@ -105,7 +105,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
             setStatus("max-attempts");
             await registerExpedienteFailure(expediente.tomadorId, token, {
               status: "VALIDATION_FAILED",
-              reasonCode: "MAX_ATTEMPTS_REACHED",
+              reasonCode: response.validation.reasonCode,
               attemptsUsed: response.attempts.used
             });
             return;

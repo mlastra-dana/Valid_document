@@ -190,26 +190,28 @@ Responsabilidades:
 - Usar el API Data Retrieval de DANAconnect para consultar el tomador.
 - Invocar Amazon Bedrock Sonnet para validar legibilidad, tipo de documento y número detectado.
 - Comparar el número detectado contra el esperado del tomador.
-- Usar el API Upload de DANAconnect para subir la cédula validada.
-- Registrar resultados fallidos para que DANAconnect continúe los refuerzos.
+- Usar File Upload API de DANAconnect para subir la cédula validada.
+- Disparar Start Conversation v2 una sola vez: al éxito o al agotarse el tercer intento fallido.
 
 Variables del backend:
 
 ```env
 CORS_ORIGIN=https://tu-dominio-amplify.com
 DANA_BASE_URL=https://appserv.danaconnect.com
-DANA_TOKEN_URL=https://auth.danaconnect.com/oauth/token
+DANA_TOKEN_URL=https://auth.danaconnect.com/oauth2/token
 DANA_ACCESS_TOKEN=
 DANA_CLIENT_ID=
 DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
-DANA_SCOPE=
-DANA_DATA_FIELDS=tomadorId,nombreTomador,tipoPersona,numeroDocumentoEsperado,expedienteCompletado,fechaCompletado,intentosRealizados,maximoIntentos
+DANA_OAUTH_SCOPE=
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
-DANA_API_UPLOAD_URL=https://...
-DANA_RESULT_URL=https://...
+DANA_SUCCESS_PROJECT_ID=
+DANA_FAILURE_PROJECT_ID=
+DANA_SUCCESS_CONVERSATION_ID=
+DANA_FAILURE_CONVERSATION_ID=
+DANA_CONVERSATION_DEBUG=0
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
@@ -217,6 +219,12 @@ MAX_FILE_SIZE_BYTES=10485760
 ```
 
 La carpeta `lambda/` es la referencia del código que debe estar dentro de AWS Lambda.
+
+Documentación adicional:
+
+- [Arquitectura](/Users/marialastra/Documents/Valid_document/docs/architecture.md)
+- [Proceso Validoc](/Users/marialastra/Documents/Valid_document/docs/process.md)
+- [Lista DANA de pruebas](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-test-list-fields.md)
 
 ## Integración con DANAconnect
 
@@ -273,7 +281,7 @@ VITE_USE_MOCK_API=false
 Para probar este demo ya integrado:
 
 1. Desplegar la Lambda con Function URL.
-2. Configurar en la Lambda `DANA_BASE_URL`, credenciales de Data Retrieval y el endpoint real de API Upload.
+2. Configurar en la Lambda `DANA_BASE_URL`, credenciales de Data Retrieval/File Upload y los conversation IDs de resultado.
 3. Configurar permisos IAM para invocar Bedrock Sonnet.
 4. Configurar en Amplify `VITE_API_BASE_URL` con la Function URL.
 5. Abrir `/completar-expediente?tomadorId=ABC123&token=TOKEN_REAL`.

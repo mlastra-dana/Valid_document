@@ -30,23 +30,37 @@ SECURITY_HEADERS = {
 }
 
 DANA_BASE_URL = os.environ.get("DANA_BASE_URL", "https://appserv.danaconnect.com").rstrip("/")
-DANA_TOKEN_URL = os.environ.get("DANA_TOKEN_URL", "")
+DANA_TOKEN_URL = os.environ.get("DANA_TOKEN_URL", "https://auth.danaconnect.com/oauth2/token")
 DANA_ACCESS_TOKEN = os.environ.get("DANA_ACCESS_TOKEN", "")
 DANA_CLIENT_ID = os.environ.get("DANA_CLIENT_ID", "")
 DANA_CLIENT_SECRET = os.environ.get("DANA_CLIENT_SECRET", "")
 DANA_USERNAME = os.environ.get("DANA_USERNAME", "")
 DANA_PASSWORD = os.environ.get("DANA_PASSWORD", "")
-DANA_SCOPE = os.environ.get("DANA_SCOPE", "")
-DANA_DATA_FIELDS = os.environ.get(
-    "DANA_DATA_FIELDS",
-    "tomadorId,nombreTomador,tipoPersona,numeroDocumentoEsperado,"
-    "expedienteCompletado,fechaCompletado,intentosRealizados,maximoIntentos",
+DANA_OAUTH_SCOPE = os.environ.get("DANA_OAUTH_SCOPE", "")
+VALIDOC_DATA_FIELDS = (
+    "Titular_ID,NombreTitular,Correo_Titular,Telefono_Titular,NoCedula,Producto,"
+    "Correo_Interno,FechaUltimoValidaDoc,ProcesaValidaDoc1,EnviadoValidaDoc,"
+    "AperturaValidaDoc,ReboteValidaDoc,FiltradoValidaDoc,IrConsigna,ConsignaDoc,"
+    "ConsignaDocADS,EstadoConsignaDoc,MotivoFallidoDoc,IntentosValidaDoc,"
+    "DocumentoDetectado,NombreArchivoCedula,FechaConsignaDoc"
 )
 DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
-DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "body").lower()
-DANA_API_UPLOAD_URL = os.environ.get("DANA_API_UPLOAD_URL", "")
-DANA_RESULT_URL = os.environ.get("DANA_RESULT_URL", "")
+DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "basic").lower()
+VALIDOC_FILE_UPLOAD_PATH = "/dana/conversation/http/rest/file/upload"
+DANA_SUCCESS_PROJECT_ID = os.environ.get("DANA_SUCCESS_PROJECT_ID", "")
+DANA_FAILURE_PROJECT_ID = os.environ.get("DANA_FAILURE_PROJECT_ID", "")
+DANA_SUCCESS_CONVERSATION_ID = os.environ.get("DANA_SUCCESS_CONVERSATION_ID", "")
+DANA_FAILURE_CONVERSATION_ID = os.environ.get("DANA_FAILURE_CONVERSATION_ID", "")
+DANA_CONVERSATION_DEBUG = os.environ.get("DANA_CONVERSATION_DEBUG", "0")
 DANA_TIMEOUT_SECONDS = int(os.environ.get("DANA_TIMEOUT_SECONDS", "20"))
+
+FIELD_TOMADOR_ID = "Titular_ID"
+FIELD_STATUS = "EstadoConsignaDoc"
+FIELD_REASON_CODE = "MotivoFallidoDoc"
+FIELD_ATTEMPTS_USED = "IntentosValidaDoc"
+FIELD_FILE_ID = "ConsignaDocADS"
+FIELD_FILE_NAME = "NombreArchivoCedula"
+FIELD_DETECTED_DOCUMENT = "DocumentoDetectado"
 
 BEDROCK_REGION = os.environ.get("BEDROCK_REGION") or os.environ.get("AWS_REGION", "us-east-1")
 BEDROCK_MODEL_ID = os.environ.get(
@@ -207,12 +221,12 @@ def get_dana_access_token(portal_token):
         form_data["client_id"] = DANA_CLIENT_ID
     if DANA_CLIENT_SECRET:
         form_data["client_secret"] = DANA_CLIENT_SECRET
-    if DANA_USERNAME and DANA_PASSWORD:
+    if DANA_USERNAME and DANA_PASSWORD and not (DANA_CLIENT_ID and DANA_CLIENT_SECRET):
         form_data["grant_type"] = "password"
         form_data["username"] = DANA_USERNAME
         form_data["password"] = DANA_PASSWORD
-    if DANA_SCOPE:
-        form_data["scope"] = DANA_SCOPE
+    if DANA_OAUTH_SCOPE:
+        form_data["scope"] = DANA_OAUTH_SCOPE
 
     if DANA_OAUTH_AUTH_METHOD == "basic" and DANA_CLIENT_ID and DANA_CLIENT_SECRET:
         credentials = f"{DANA_CLIENT_ID}:{DANA_CLIENT_SECRET}".encode("utf-8")
@@ -295,9 +309,23 @@ def get_json(url, headers):
 def build_data_retrieval_url(dana_identifier):
     api_version = "1.0" if use_dana_basic_auth() else "2.0"
     query_param_name = "fields" if use_dana_basic_auth() else DANA_FIELDS_QUERY_PARAM
-    query = urllib.parse.urlencode({query_param_name: DANA_DATA_FIELDS})
+    query = urllib.parse.urlencode({query_param_name: VALIDOC_DATA_FIELDS})
     encoded_dana = urllib.parse.quote(dana_identifier, safe="")
     return f"{DANA_BASE_URL}/api/{api_version}/rest/conversation/data/{encoded_dana}?{query}"
+
+
+def build_upload_url():
+    return f"{DANA_BASE_URL}{VALIDOC_FILE_UPLOAD_PATH}"
+
+
+def build_start_conversation_url(conversation_id):
+    encoded_conversation_id = urllib.parse.quote(str(conversation_id), safe="")
+    return f"{DANA_BASE_URL}/api/2.0/rest/conversation/{encoded_conversation_id}/start/data"
+
+
+def build_start_project_conversation_url(project_id):
+    encoded_project_id = urllib.parse.quote(str(project_id), safe="")
+    return f"{DANA_BASE_URL}/api/2.0/rest/conversation/ProjectID/{encoded_project_id}/start/data"
 
 
 def get_first_value(data, *keys):
@@ -330,6 +358,8 @@ def retrieve_tomador(tomador_id, portal_token):
         data,
         "numeroDocumentoEsperado",
         "NUMERODOCUMENTOESPERADO",
+        "NoCedula",
+        "NOCEDULA",
         "CEDULA",
         "DOCUMENTO",
         "IDENTIFICACION",
@@ -337,45 +367,149 @@ def retrieve_tomador(tomador_id, portal_token):
     )
 
     return {
-        "tomadorId": get_first_value(data, "tomadorId", "TOMADORID", "dana", "danaParam") or tomador_id,
+        "tomadorId": get_first_value(
+            data, "tomadorId", "TOMADORID", "Titular_ID", "TITULAR_ID", "dana", "danaParam"
+        )
+        or tomador_id,
         "nombreTomador": get_first_value(
-            data, "nombreTomador", "NOMBRETOMADOR", "NOMBRE", "NOMBRECLIENTE", "CLIENTE"
+            data,
+            "nombreTomador",
+            "NOMBRETOMADOR",
+            "NombreTitular",
+            "NOMBRETITULAR",
+            "NOMBRE",
+            "NOMBRECLIENTE",
+            "CLIENTE",
         ),
         "tipoPersona": get_first_value(data, "tipoPersona", "TIPOPERSONA") or "natural",
         "numeroDocumentoEsperado": documento,
         "expedienteCompletado": parse_bool(
-            get_first_value(data, "expedienteCompletado", "EXPEDIENTECOMPLETADO")
+            get_first_value(
+                data, "expedienteCompletado", "EXPEDIENTECOMPLETADO", "ConsignaDoc", "CONSIGNADOC"
+            )
         ),
-        "fechaCompletado": get_first_value(data, "fechaCompletado", "FECHACOMPLETADO"),
+        "fechaCompletado": get_first_value(
+            data, "fechaCompletado", "FECHACOMPLETADO", "FechaConsignaDoc", "FECHACONSIGNADOC"
+        ),
         "intentosRealizados": int(
-            get_first_value(data, "intentosRealizados", "INTENTOSREALIZADOS") or 0
+            get_first_value(
+                data, "intentosRealizados", "INTENTOSREALIZADOS", "IntentosValidaDoc", "INTENTOSVALIDADOC"
+            )
+            or 0
         ),
         "maximoIntentos": int(get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS") or 3),
     }
 
 
-def register_result(tomador_id, payload, portal_token):
-    if not DANA_RESULT_URL:
+def start_conversation(project_id, conversation_id, fields, portal_token):
+    if not project_id and not conversation_id:
         return
-    post_json(DANA_RESULT_URL, {"tomadorId": tomador_id, **payload}, portal_token)
+
+    url = (
+        build_start_project_conversation_url(project_id)
+        if project_id
+        else build_start_conversation_url(conversation_id)
+    )
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(fields).encode("utf-8"),
+        method="POST",
+        headers={
+            **dana_headers(portal_token),
+            "X-DEBUG": DANA_CONVERSATION_DEBUG,
+        },
+    )
+    send_request(request)
+
+
+def build_result_fields(tomador_id, payload):
+    return {
+        FIELD_TOMADOR_ID: tomador_id,
+        FIELD_STATUS: payload.get("status", ""),
+        FIELD_REASON_CODE: payload.get("reasonCode", ""),
+        FIELD_ATTEMPTS_USED: str(payload.get("attemptsUsed", "")),
+        FIELD_FILE_ID: payload.get("fileID", ""),
+        FIELD_FILE_NAME: payload.get("fileName", ""),
+        FIELD_DETECTED_DOCUMENT: payload.get("detectedDocumentNumber", ""),
+    }
+
+
+def register_result(tomador_id, payload, portal_token):
+    start_conversation(
+        DANA_FAILURE_PROJECT_ID,
+        DANA_FAILURE_CONVERSATION_ID,
+        build_result_fields(tomador_id, payload),
+        portal_token,
+    )
+
+
+def build_multipart_body(field_name, file_name, content_type, file_bytes):
+    boundary = f"----validoc{int(time.time() * 1000)}"
+    header = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="{field_name}"; filename="{file_name}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n"
+    ).encode("utf-8")
+    footer = f"\r\n--{boundary}--\r\n".encode("utf-8")
+    return boundary, header + file_bytes + footer
+
+
+def upload_file_to_dana(document):
+    if not use_dana_basic_auth():
+        raise AppError(
+            500,
+            "SERVER_ERROR",
+            "DANA_USERNAME y DANA_PASSWORD son requeridos para File Upload.",
+        )
+
+    file_bytes = base64.b64decode(document["contentBase64"])
+    boundary, multipart_body = build_multipart_body(
+        "file",
+        document["fileName"],
+        document["contentType"],
+        file_bytes,
+    )
+    request = urllib.request.Request(
+        build_upload_url(),
+        data=multipart_body,
+        method="POST",
+        headers={
+            **dana_basic_headers(),
+            "Content-Type": f"multipart/form-data; boundary={boundary}",
+            "X-DEBUG": DANA_CONVERSATION_DEBUG,
+        },
+    )
+    return send_request(request)
 
 
 def upload_document(payload, portal_token):
-    dana_result = post_json(
-        DANA_API_UPLOAD_URL,
-        {
-            "tomadorId": payload["tomadorId"],
-            "detectedDocumentNumber": payload.get("detectedDocumentNumber"),
-            "document": payload["document"],
-        },
+    upload_result = upload_file_to_dana(payload["document"])
+    file_id = upload_result.get("fileID")
+    if not file_id:
+        raise AppError(502, "DANA_UPLOAD_ERROR", "DANAconnect no retornó fileID.")
+
+    start_conversation(
+        DANA_SUCCESS_PROJECT_ID,
+        DANA_SUCCESS_CONVERSATION_ID,
+        build_result_fields(
+            payload["tomadorId"],
+            {
+                "status": "COMPLETED",
+                "reasonCode": "VALID_DOCUMENT",
+                "fileID": file_id,
+                "fileName": upload_result.get("fileName") or payload["document"]["fileName"],
+                "detectedDocumentNumber": payload.get("detectedDocumentNumber"),
+            },
+        ),
         portal_token,
     )
+
     return {
         "success": True,
-        "documentId": dana_result.get("documentId") or dana_result.get("id") or f"DANA-{int(time.time())}",
-        "indexed": dana_result.get("indexed", True),
+        "documentId": file_id,
+        "indexed": True,
         "expedienteStatus": "COMPLETED",
-        "completedAt": dana_result.get("completedAt") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "completedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
 
@@ -503,9 +637,6 @@ def handle_validate_document(portal_token, payload):
             )
         )
         validation = validation_result("VALIDATION_SERVICE_ERROR")
-
-    if attempts["remaining"] <= 0 and validation["reasonCode"] != "VALID_DOCUMENT":
-        validation = validation_result("MAX_ATTEMPTS_REACHED", validation.get("detectedDocumentNumber"))
 
     return response(200, {"success": True, "validation": validation, "attempts": attempts})
 
