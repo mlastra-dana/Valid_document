@@ -77,7 +77,7 @@ export const DocumentUploader = ({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div
         role="button"
         tabIndex={disabled || processing ? -1 : 0}
@@ -101,23 +101,27 @@ export const DocumentUploader = ({
         }}
         onClick={() => inputRef.current?.click()}
         aria-label="Seleccionar o arrastrar documento de identidad"
-        className={`flex min-h-52 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 text-center transition ${
+        className={`flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-7 text-center transition ${
           dragActive
             ? "border-mercantil-blue bg-mercantil-sky"
-            : "border-mercantil-border bg-white"
-        } ${disabled || processing ? "cursor-not-allowed opacity-60" : "hover:border-mercantil-blue hover:bg-mercantil-sky"}`}
+            : "border-[#DDE6F0] bg-white"
+        } ${disabled || processing ? "cursor-not-allowed opacity-60" : "hover:border-mercantil-blue hover:bg-[#F6FBFF]"}`}
       >
-        <UploadCloud className="h-12 w-12 text-mercantil-blue" aria-hidden="true" />
-        <p className="mt-3 text-lg font-bold text-mercantil-navy">
-          Arrastra tu documento aquí
+        <span className="flex h-16 w-16 items-center justify-center rounded-xl bg-[#EEF7FD]">
+          <UploadCloud className="h-9 w-9 text-mercantil-blue" aria-hidden="true" />
+        </span>
+        <p className="mt-5 text-xl font-black text-slate-950">
+          Arrastra el archivo aquí
         </p>
-        <p className="mt-1 text-sm text-mercantil-muted">o selecciónalo desde tu dispositivo</p>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">
+          PDF, JPG o PNG.
+        </p>
         <label
           htmlFor={inputId}
-          className="mt-4 inline-flex cursor-pointer rounded-md bg-mercantil-blue px-5 py-3 font-semibold text-white"
+          className="mt-6 inline-flex cursor-pointer rounded-md bg-mercantil-blue px-6 py-3 font-bold text-white shadow-sm hover:bg-mercantil-navy"
           onClick={(event) => event.stopPropagation()}
         >
-          Seleccionar archivo
+          Seleccionar documento
         </label>
         <input
           ref={inputRef}
@@ -140,7 +144,7 @@ export const DocumentUploader = ({
               type="button"
               onClick={clearSelection}
               disabled={processing}
-              className="inline-flex items-center justify-center gap-2 rounded-md border border-mercantil-border px-5 py-3 font-semibold text-mercantil-navy disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-md border border-[#DDE6F0] px-5 py-3 font-bold text-mercantil-navy disabled:opacity-60"
             >
               <Trash2 className="h-5 w-5" aria-hidden="true" />
               Eliminar archivo
@@ -149,7 +153,7 @@ export const DocumentUploader = ({
               type="button"
               onClick={() => inputRef.current?.click()}
               disabled={processing}
-              className="rounded-md border border-mercantil-blue px-5 py-3 font-semibold text-mercantil-blue disabled:opacity-60"
+              className="rounded-md border border-mercantil-blue px-5 py-3 font-bold text-mercantil-blue disabled:opacity-60"
             >
               Reemplazar archivo
             </button>
@@ -157,7 +161,7 @@ export const DocumentUploader = ({
               type="button"
               onClick={() => setConfirmOpen(true)}
               disabled={processing || disabled}
-              className="rounded-md bg-mercantil-blue px-5 py-3 font-semibold text-white hover:bg-mercantil-navy disabled:opacity-60 sm:ml-auto"
+              className="rounded-md bg-mercantil-blue px-6 py-3 font-bold text-white shadow-sm hover:bg-mercantil-navy disabled:opacity-60 sm:ml-auto"
             >
               Enviar documento
             </button>

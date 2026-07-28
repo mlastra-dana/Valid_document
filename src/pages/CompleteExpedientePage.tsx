@@ -18,12 +18,12 @@ import { InvalidLink } from "../components/status/InvalidLink";
 import { SuccessResult } from "../components/status/SuccessResult";
 import { ValidationError } from "../components/status/ValidationError";
 import { ApiError } from "../types/api";
+import { MaskedDocumentNumber } from "../components/common/MaskedDocumentNumber";
 
 const recommendations = [
   "Coloca la cédula sobre una superficie plana.",
-  "Verifica que todos los bordes sean visibles.",
-  "Evita reflejos, sombras y poca iluminación.",
-  "Carga un archivo donde los datos puedan leerse con claridad."
+  "Asegúrate de que todos los bordes sean visibles.",
+  "Evita reflejos, sombras y poca iluminación."
 ];
 
 const PendingExpediente = ({
@@ -62,62 +62,97 @@ const PendingExpediente = ({
   return (
     <>
       <ProcessStepper activeStep={2} processing={processing} />
-      <section className="rounded-lg border border-mercantil-border bg-white p-6 shadow-portal sm:p-8">
-        <div className="mb-6">
-          <p className="text-sm font-semibold uppercase tracking-wide text-mercantil-blue">
-            Expediente pendiente
-          </p>
-          <h1 className="mt-2 text-2xl font-bold text-mercantil-navy">
-            {expediente.nombreTomador ? `Hola, ${expediente.nombreTomador}` : "Completa tu expediente"}
+      <section className="mx-auto grid max-w-6xl items-start gap-7 lg:grid-cols-[360px_1fr]">
+        <aside className="rounded-xl border border-[#DDE6F0] bg-white p-6 shadow-[0_22px_60px_rgba(15,23,42,0.06)]">
+          <p className="text-sm font-black uppercase text-mercantil-blue">Datos del expediente</p>
+          <h1 className="mt-3 text-3xl font-black leading-tight text-slate-950">
+            Cédula de identidad
           </h1>
-          <p className="mt-3 leading-7 text-mercantil-text">
-            Para continuar necesitamos recibir una imagen o PDF de la cédula de identidad
-            venezolana asociada a este expediente.
-          </p>
-        </div>
 
-        <div className="space-y-5">
-          <FileRequirements />
-          <AttemptCounter attempts={validation.attempts} />
+          <dl className="mt-7 space-y-4 text-sm">
+            {expediente.nombreTomador ? (
+              <div className="rounded-xl bg-[#F8FAFC] p-4">
+                <dt className="font-black uppercase text-slate-500">Tomador</dt>
+                <dd className="mt-1 text-base font-bold text-slate-950">
+                  {expediente.nombreTomador}
+                </dd>
+              </div>
+            ) : null}
+            {expediente.numeroDocumentoEsperado ? (
+              <div className="rounded-xl bg-[#F8FAFC] p-4">
+                <dt className="font-black uppercase text-slate-500">Documento</dt>
+                <dd className="mt-1 text-base font-bold text-slate-950">
+                  <MaskedDocumentNumber value={expediente.numeroDocumentoEsperado} />
+                </dd>
+              </div>
+            ) : null}
+            <div className="rounded-xl bg-[#F8FAFC] p-4">
+              <dt className="font-black uppercase text-slate-500">Estado</dt>
+              <dd className="mt-1 text-base font-bold text-mercantil-blue">Pendiente</dd>
+            </div>
+          </dl>
 
-          <div className="rounded-md border border-mercantil-border bg-white p-4">
-            <h2 className="font-semibold text-mercantil-navy">Recomendaciones</h2>
-            <ul className="mt-3 list-disc space-y-2 pl-5 text-sm text-mercantil-text">
-              {recommendations.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
+          <div className="mt-5">
+            <AttemptCounter attempts={validation.attempts} />
+          </div>
+        </aside>
+
+        <div className="rounded-xl border border-[#DDE6F0] bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.09)] sm:p-7">
+          <div className="mb-6 border-b border-[#E7ECF3] pb-5">
+            <p className="text-sm font-black uppercase text-mercantil-blue">
+              Adjuntar documento
+            </p>
+            <h2 className="mt-2 text-3xl font-black text-slate-950">Carga el archivo</h2>
+            <p className="mt-3 leading-7 text-slate-600">
+              Selecciona una imagen o PDF legible.
+            </p>
           </div>
 
-          {validation.validationResult && validation.status === "validation-error" ? (
-            <ValidationError result={validation.validationResult} />
-          ) : null}
+          <div className="space-y-5">
+            <FileRequirements />
 
-          {validation.status === "service-error" ? (
-            <AlertMessage tone="error">
-              <p className="font-bold">{mapApiError(validation.error).title}</p>
-              <p className="mt-1">{mapApiError(validation.error).message}</p>
-            </AlertMessage>
-          ) : null}
-
-          {processing ? (
-            <LoadingScreen
-              title={
-                validation.status === "registering"
-                  ? "Registrando e indexando el documento"
-                  : "Validación en proceso"
-              }
-              message={`${validation.processingMessage} No cierres esta ventana.`}
+            <DocumentUploader
+              disabled={validation.attempts.remaining <= 0}
+              processing={processing}
+              onSubmit={validation.submitDocument}
+              onFileChange={validation.resetRecoverableError}
             />
-          ) : null}
 
-          <DocumentUploader
-            disabled={validation.attempts.remaining <= 0}
-            processing={processing}
-            onSubmit={validation.submitDocument}
-            onFileChange={validation.resetRecoverableError}
-          />
-          <SecurityNotice />
+            {validation.validationResult && validation.status === "validation-error" ? (
+              <ValidationError result={validation.validationResult} />
+            ) : null}
+
+            {validation.status === "service-error" ? (
+              <AlertMessage tone="error">
+                <p className="font-bold">{mapApiError(validation.error).title}</p>
+                <p className="mt-1">{mapApiError(validation.error).message}</p>
+              </AlertMessage>
+            ) : null}
+
+            {processing ? (
+              <LoadingScreen
+                title={
+                  validation.status === "registering"
+                    ? "Registrando e indexando el documento"
+                    : "Validación en proceso"
+                }
+                message={`${validation.processingMessage} No cierres esta ventana.`}
+              />
+            ) : null}
+
+            <div className="grid gap-4">
+              <div className="rounded-xl border border-[#E7ECF3] bg-white p-5">
+                <h2 className="font-black text-mercantil-navy">Recomendaciones</h2>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600">
+                  {recommendations.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+
+            <SecurityNotice />
+          </div>
         </div>
       </section>
     </>

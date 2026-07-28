@@ -197,6 +197,7 @@ Variables del backend:
 
 ```env
 CORS_ORIGIN=https://tu-dominio-amplify.com
+DANA_BASE_URL=https://appserv.danaconnect.com
 DANA_TOKEN_URL=https://auth.danaconnect.com/oauth/token
 DANA_ACCESS_TOKEN=
 DANA_CLIENT_ID=
@@ -204,7 +205,9 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_SCOPE=
-DANA_DATA_RETRIEVAL_URL=https://...
+DANA_DATA_FIELDS=tomadorId,nombreTomador,tipoPersona,numeroDocumentoEsperado,expedienteCompletado,fechaCompletado,intentosRealizados,maximoIntentos
+DANA_FIELDS_QUERY_PARAM=fieldList
+DANA_OAUTH_AUTH_METHOD=basic
 DANA_API_UPLOAD_URL=https://...
 DANA_RESULT_URL=https://...
 DANA_TIMEOUT_SECONDS=20
@@ -270,7 +273,7 @@ VITE_USE_MOCK_API=false
 Para probar este demo ya integrado:
 
 1. Desplegar la Lambda con Function URL.
-2. Configurar en la Lambda los endpoints reales de DANAconnect Data Retrieval y API Upload.
+2. Configurar en la Lambda `DANA_BASE_URL`, credenciales de Data Retrieval y el endpoint real de API Upload.
 3. Configurar permisos IAM para invocar Bedrock Sonnet.
 4. Configurar en Amplify `VITE_API_BASE_URL` con la Function URL.
 5. Abrir `/completar-expediente?tomadorId=ABC123&token=TOKEN_REAL`.
@@ -285,7 +288,7 @@ En Amplify Hosting agrega:
 
 ## Logo
 
-`public/mercantil-seguros-logo.svg` es un placeholder. Debe sustituirse por el recurso oficial autorizado de Mercantil Seguros antes de producción.
+Los logos visibles están en `public/icono-mercantil.png` y `public/mercantilseguros.png`.
 
 ## Pruebas manuales sugeridas
 

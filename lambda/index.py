@@ -29,6 +29,7 @@ SECURITY_HEADERS = {
     "Cache-Control": "no-store",
 }
 
+DANA_BASE_URL = os.environ.get("DANA_BASE_URL", "https://appserv.danaconnect.com").rstrip("/")
 DANA_TOKEN_URL = os.environ.get("DANA_TOKEN_URL", "")
 DANA_ACCESS_TOKEN = os.environ.get("DANA_ACCESS_TOKEN", "")
 DANA_CLIENT_ID = os.environ.get("DANA_CLIENT_ID", "")
@@ -36,7 +37,13 @@ DANA_CLIENT_SECRET = os.environ.get("DANA_CLIENT_SECRET", "")
 DANA_USERNAME = os.environ.get("DANA_USERNAME", "")
 DANA_PASSWORD = os.environ.get("DANA_PASSWORD", "")
 DANA_SCOPE = os.environ.get("DANA_SCOPE", "")
-DANA_DATA_RETRIEVAL_URL = os.environ.get("DANA_DATA_RETRIEVAL_URL", "")
+DANA_DATA_FIELDS = os.environ.get(
+    "DANA_DATA_FIELDS",
+    "tomadorId,nombreTomador,tipoPersona,numeroDocumentoEsperado,"
+    "expedienteCompletado,fechaCompletado,intentosRealizados,maximoIntentos",
+)
+DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
+DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "body").lower()
 DANA_API_UPLOAD_URL = os.environ.get("DANA_API_UPLOAD_URL", "")
 DANA_RESULT_URL = os.environ.get("DANA_RESULT_URL", "")
 DANA_TIMEOUT_SECONDS = int(os.environ.get("DANA_TIMEOUT_SECONDS", "20"))
@@ -195,6 +202,7 @@ def get_dana_access_token(portal_token):
         return _TOKEN_CACHE["access_token"]
 
     form_data = {"grant_type": "client_credentials"}
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
     if DANA_CLIENT_ID:
         form_data["client_id"] = DANA_CLIENT_ID
     if DANA_CLIENT_SECRET:
@@ -206,12 +214,18 @@ def get_dana_access_token(portal_token):
     if DANA_SCOPE:
         form_data["scope"] = DANA_SCOPE
 
+    if DANA_OAUTH_AUTH_METHOD == "basic" and DANA_CLIENT_ID and DANA_CLIENT_SECRET:
+        credentials = f"{DANA_CLIENT_ID}:{DANA_CLIENT_SECRET}".encode("utf-8")
+        headers["Authorization"] = f"Basic {base64.b64encode(credentials).decode('ascii')}"
+        form_data.pop("client_id", None)
+        form_data.pop("client_secret", None)
+
     encoded = urllib.parse.urlencode(form_data).encode("utf-8")
     request = urllib.request.Request(
         DANA_TOKEN_URL,
         data=encoded,
         method="POST",
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        headers=headers,
     )
     token_response = send_request(request)
     access_token = token_response.get("access_token")
@@ -240,6 +254,18 @@ def send_request(request):
         raise AppError(502, "DANA_SERVICE_ERROR", "No fue posible conectar con DANAconnect.")
 
 
+def use_dana_basic_auth():
+    return bool(DANA_USERNAME and DANA_PASSWORD)
+
+
+def dana_basic_headers():
+    credentials = f"{DANA_USERNAME}:{DANA_PASSWORD}".encode("utf-8")
+    return {
+        "Accept": "application/json",
+        "Authorization": f"Basic {base64.b64encode(credentials).decode('ascii')}",
+    }
+
+
 def dana_headers(portal_token):
     return {
         "Content-Type": "application/json",
@@ -261,18 +287,70 @@ def post_json(url, payload, portal_token):
     return send_request(request)
 
 
+def get_json(url, headers):
+    request = urllib.request.Request(url, method="GET", headers=headers)
+    return send_request(request)
+
+
+def build_data_retrieval_url(dana_identifier):
+    api_version = "1.0" if use_dana_basic_auth() else "2.0"
+    query_param_name = "fields" if use_dana_basic_auth() else DANA_FIELDS_QUERY_PARAM
+    query = urllib.parse.urlencode({query_param_name: DANA_DATA_FIELDS})
+    encoded_dana = urllib.parse.quote(dana_identifier, safe="")
+    return f"{DANA_BASE_URL}/api/{api_version}/rest/conversation/data/{encoded_dana}?{query}"
+
+
+def get_first_value(data, *keys):
+    for key in keys:
+        if key in data and data[key] not in (None, ""):
+            return data[key]
+    upper_data = {str(key).upper(): value for key, value in data.items()}
+    for key in keys:
+        value = upper_data.get(str(key).upper())
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def parse_bool(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"true", "1", "si", "sí", "yes", "y"}
+
+
 def retrieve_tomador(tomador_id, portal_token):
-    body = post_json(DANA_DATA_RETRIEVAL_URL, {"tomadorId": tomador_id}, portal_token)
+    data_url = build_data_retrieval_url(tomador_id)
+    headers = dana_basic_headers() if use_dana_basic_auth() else dana_headers(portal_token)
+    body = get_json(data_url, headers)
     data = body.get("data") or body.get("tomador") or body
+    if isinstance(data, list):
+        data = data[0] if data else {}
+
+    documento = get_first_value(
+        data,
+        "numeroDocumentoEsperado",
+        "NUMERODOCUMENTOESPERADO",
+        "CEDULA",
+        "DOCUMENTO",
+        "IDENTIFICACION",
+        "CI",
+    )
+
     return {
-        "tomadorId": data.get("tomadorId") or tomador_id,
-        "nombreTomador": data.get("nombreTomador"),
-        "tipoPersona": data.get("tipoPersona"),
-        "numeroDocumentoEsperado": data.get("numeroDocumentoEsperado"),
-        "expedienteCompletado": bool(data.get("expedienteCompletado")),
-        "fechaCompletado": data.get("fechaCompletado"),
-        "intentosRealizados": int(data.get("intentosRealizados") or 0),
-        "maximoIntentos": int(data.get("maximoIntentos") or 3),
+        "tomadorId": get_first_value(data, "tomadorId", "TOMADORID", "dana", "danaParam") or tomador_id,
+        "nombreTomador": get_first_value(
+            data, "nombreTomador", "NOMBRETOMADOR", "NOMBRE", "NOMBRECLIENTE", "CLIENTE"
+        ),
+        "tipoPersona": get_first_value(data, "tipoPersona", "TIPOPERSONA") or "natural",
+        "numeroDocumentoEsperado": documento,
+        "expedienteCompletado": parse_bool(
+            get_first_value(data, "expedienteCompletado", "EXPEDIENTECOMPLETADO")
+        ),
+        "fechaCompletado": get_first_value(data, "fechaCompletado", "FECHACOMPLETADO"),
+        "intentosRealizados": int(
+            get_first_value(data, "intentosRealizados", "INTENTOSREALIZADOS") or 0
+        ),
+        "maximoIntentos": int(get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS") or 3),
     }
 
 

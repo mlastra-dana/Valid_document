@@ -40,6 +40,7 @@ Python 3.12
 
 ```env
 CORS_ORIGIN=https://tu-dominio-amplify.com
+DANA_BASE_URL=https://appserv.danaconnect.com
 DANA_TOKEN_URL=https://auth.danaconnect.com/oauth/token
 DANA_ACCESS_TOKEN=
 DANA_CLIENT_ID=
@@ -47,7 +48,9 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_SCOPE=
-DANA_DATA_RETRIEVAL_URL=https://...
+DANA_DATA_FIELDS=tomadorId,nombreTomador,tipoPersona,numeroDocumentoEsperado,expedienteCompletado,fechaCompletado,intentosRealizados,maximoIntentos
+DANA_FIELDS_QUERY_PARAM=fieldList
+DANA_OAUTH_AUTH_METHOD=basic
 DANA_API_UPLOAD_URL=https://...
 DANA_RESULT_URL=https://...
 DANA_TIMEOUT_SECONDS=20
@@ -56,7 +59,12 @@ BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
 MAX_FILE_SIZE_BYTES=10485760
 ```
 
-Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`; también soporta password grant si el ambiente de DANAconnect lo requiere.
+Para Data Retrieval hay dos caminos:
+
+- Si configuras `DANA_USERNAME` y `DANA_PASSWORD`, se usa el camino estable probado: `GET /api/1.0/rest/conversation/data/{dana}?fields=...` con `Authorization: Basic ...`.
+- Si no configuras usuario/password, se usa compatibilidad v2: `GET /api/2.0/rest/conversation/data/{dana}?{DANA_FIELDS_QUERY_PARAM}=...` con bearer token.
+
+Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
 
 ## Endpoints expuestos por Function URL
 
