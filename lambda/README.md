@@ -52,8 +52,6 @@ DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_SUCCESS_PROJECT_ID=
 DANA_FAILURE_PROJECT_ID=
-DANA_SUCCESS_CONVERSATION_ID=
-DANA_FAILURE_CONVERSATION_ID=
 DANA_CONVERSATION_DEBUG=0
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1
@@ -76,7 +74,7 @@ Para Start Conversation se usa OAuth Bearer. El camino recomendado es por Projec
 POST /api/2.0/rest/conversation/ProjectID/{projectId}/start/data
 ```
 
-Configura `DANA_SUCCESS_PROJECT_ID` para el resultado exitoso y `DANA_FAILURE_PROJECT_ID` para el flujo de fallo/refuerzo. `DANA_SUCCESS_CONVERSATION_ID` y `DANA_FAILURE_CONVERSATION_ID` quedan solo como compatibilidad si se decide disparar por conversation id directo.
+Configura `DANA_SUCCESS_PROJECT_ID` para el resultado exitoso y `DANA_FAILURE_PROJECT_ID` para el flujo de fallo/refuerzo. El disparo se hace por `ProjectID` para mantener el mismo criterio entre ambientes.
 
 La Lambda no registra cada intento fallido; solo dispara el flujo de fallo cuando el tercer intento queda agotado, enviando el motivo final (`UNREADABLE_DOCUMENT`, `NOT_IDENTITY_DOCUMENT` o `TOMADOR_MISMATCH`).
 

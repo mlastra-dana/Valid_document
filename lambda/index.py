@@ -49,8 +49,6 @@ DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "basic").lower
 VALIDOC_FILE_UPLOAD_PATH = "/dana/conversation/http/rest/file/upload"
 DANA_SUCCESS_PROJECT_ID = os.environ.get("DANA_SUCCESS_PROJECT_ID", "")
 DANA_FAILURE_PROJECT_ID = os.environ.get("DANA_FAILURE_PROJECT_ID", "")
-DANA_SUCCESS_CONVERSATION_ID = os.environ.get("DANA_SUCCESS_CONVERSATION_ID", "")
-DANA_FAILURE_CONVERSATION_ID = os.environ.get("DANA_FAILURE_CONVERSATION_ID", "")
 DANA_CONVERSATION_DEBUG = os.environ.get("DANA_CONVERSATION_DEBUG", "0")
 DANA_TIMEOUT_SECONDS = int(os.environ.get("DANA_TIMEOUT_SECONDS", "20"))
 
@@ -318,11 +316,6 @@ def build_upload_url():
     return f"{DANA_BASE_URL}{VALIDOC_FILE_UPLOAD_PATH}"
 
 
-def build_start_conversation_url(conversation_id):
-    encoded_conversation_id = urllib.parse.quote(str(conversation_id), safe="")
-    return f"{DANA_BASE_URL}/api/2.0/rest/conversation/{encoded_conversation_id}/start/data"
-
-
 def build_start_project_conversation_url(project_id):
     encoded_project_id = urllib.parse.quote(str(project_id), safe="")
     return f"{DANA_BASE_URL}/api/2.0/rest/conversation/ProjectID/{encoded_project_id}/start/data"
@@ -401,17 +394,12 @@ def retrieve_tomador(tomador_id, portal_token):
     }
 
 
-def start_conversation(project_id, conversation_id, fields, portal_token):
-    if not project_id and not conversation_id:
+def start_project_conversation(project_id, fields, portal_token):
+    if not project_id:
         return
 
-    url = (
-        build_start_project_conversation_url(project_id)
-        if project_id
-        else build_start_conversation_url(conversation_id)
-    )
     request = urllib.request.Request(
-        url,
+        build_start_project_conversation_url(project_id),
         data=json.dumps(fields).encode("utf-8"),
         method="POST",
         headers={
@@ -435,9 +423,8 @@ def build_result_fields(tomador_id, payload):
 
 
 def register_result(tomador_id, payload, portal_token):
-    start_conversation(
+    start_project_conversation(
         DANA_FAILURE_PROJECT_ID,
-        DANA_FAILURE_CONVERSATION_ID,
         build_result_fields(tomador_id, payload),
         portal_token,
     )
@@ -488,9 +475,8 @@ def upload_document(payload, portal_token):
     if not file_id:
         raise AppError(502, "DANA_UPLOAD_ERROR", "DANAconnect no retornó fileID.")
 
-    start_conversation(
+    start_project_conversation(
         DANA_SUCCESS_PROJECT_ID,
-        DANA_SUCCESS_CONVERSATION_ID,
         build_result_fields(
             payload["tomadorId"],
             {
