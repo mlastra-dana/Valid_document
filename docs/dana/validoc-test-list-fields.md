@@ -1,73 +1,75 @@
 # Lista DANA de Pruebas Validoc
 
+Lista objetivo: `POC_VALIDOC`.
+
 Archivo importable:
 
 ```text
 docs/dana/validoc-test-list-template.csv
 ```
 
-## Campos recomendados
+## Campos POC_VALIDOC
 
-`Titular_ID`: identificador que viaja en el enlace como `tomadorId`. Ejemplo: `V-5002012`.
+`TOMADOR_ID`: identificador que viaja en el enlace como `tomadorId`. Es el valor esperado para validar coincidencia exacta contra Bedrock. Debe incluir nacionalidad y número. Ejemplo: `V-5002012` o `E-1016824`.
 
-`NombreTitular`: nombre visible en el portal.
+`NOMBRETOMADOR`: nombre visible en el portal.
 
-`Correo_Titular`: correo del titular para comunicaciones DANA.
+`CEDULA_TOMADOR`: número de cédula del tomador como dato informativo del expediente. La validación final usa `TOMADOR_ID`.
 
-`Telefono_Titular`: teléfono de contacto.
+`EMAIL_TOMADOR`: correo del titular para comunicaciones DANA.
 
-`NoCedula`: número esperado para comparar contra Bedrock. Ejemplo: `5002012`.
+`TELEFONO_TOMADOR`: teléfono de contacto.
 
-`Producto`: producto asociado al expediente.
+`PRODUCTO`: producto asociado al expediente.
 
-`Correo_Interno`: correo operativo o de control interno.
+`ADJUNTADOC1`: `fileID` retornado por File Upload API. Solo se llena después de que Bedrock valide que el documento es legible, es una cédula y coincide exactamente con `TOMADOR_ID`.
 
-`FechaUltimoValidaDoc`: fecha/hora de la última validación.
+`DOCUMENTO_DETECTADO`: identificador leído por Bedrock, con nacionalidad y número cuando sea posible. Es texto de auditoría, no adjunto.
 
-`ProcesaValidaDoc1`: marca de control para iniciar o permitir el proceso.
+`ESTADO_VALIDOC`: estado final del proceso. Ejemplos: `COMPLETED`, `VALIDATION_FAILED`.
 
-`EnviadoValidaDoc`: marca de correo inicial enviado.
+`FECHAULTIMOVALIDOC`: fecha/hora de la última actualización del proceso.
 
-`AperturaValidaDoc`: marca de apertura del correo o enlace.
+`INTENTOS_VALIDOC`: cantidad de intentos usados al momento de la última validación fallida. No es un historial; se sobrescribe con el último intento conocido.
 
-`ReboteValidaDoc`: marca de rebote.
+`MOTIVOFALLO`: último motivo conocido de fallo. Se actualiza desde el primer intento fallido para cubrir abandono del cliente. Ejemplos: `UNREADABLE_DOCUMENT`, `NOT_IDENTITY_DOCUMENT`, `TOMADOR_MISMATCH`.
 
-`FiltradoValidaDoc`: marca de filtrado.
+`NOMBRE_ARCHIVO_DOC`: nombre del archivo seleccionado por el usuario. Es texto de auditoría; no sube ni guarda el archivo.
 
-`IrConsigna`: marca o URL/flag para llevar al portal de consignación.
-
-`ConsignaDoc`: estado simple de consignación. Puede quedar vacío, `1`, `COMPLETED` o equivalente según el flujo DANA.
-
-`ConsignaDocADS`: `fileID` retornado por File Upload API.
-
-`EstadoConsignaDoc`: estado final del proceso. Ejemplos: `COMPLETED`, `VALIDATION_FAILED`.
-
-`MotivoFallidoDoc`: motivo final solo cuando se agotan los tres intentos. Ejemplos: `UNREADABLE_DOCUMENT`, `NOT_IDENTITY_DOCUMENT`, `TOMADOR_MISMATCH`.
-
-`IntentosValidaDoc`: cantidad de intentos usados al cierre del proceso.
-
-`DocumentoDetectado`: número detectado por Bedrock, enmascarado o normalizado según el criterio de negocio.
-
-`NombreArchivoCedula`: nombre del archivo subido.
-
-`FechaConsignaDoc`: fecha/hora final de consignación.
+`UID`: identificador interno de la fila en DANA.
 
 ## Uso en la Lambda
 
 Estos campos forman parte del contrato fijo del proceso Validoc. La Lambda los define en código para Data Retrieval y para el JSON enviado a Start Conversation; no se configuran como variables de entorno.
 
-Data Retrieval solicita la lista completa para que el portal pueda mostrar el expediente y comparar `NoCedula`.
+Data Retrieval solicita la lista completa para que el portal pueda mostrar el expediente y comparar contra `TOMADOR_ID`.
 
-Start Conversation de éxito/fallo envía un JSON con estos campos de salida:
+Start Conversation de éxito envía:
 
 ```json
 {
-  "Titular_ID": "V-5002012",
-  "EstadoConsignaDoc": "COMPLETED",
-  "MotivoFallidoDoc": "",
-  "IntentosValidaDoc": "1",
-  "ConsignaDocADS": "fileID-retornado-por-DANA",
-  "NombreArchivoCedula": "cedula.pdf",
-  "DocumentoDetectado": "V5002012"
+  "TOMADOR_ID": "V-5002012",
+  "MOTIVOFALLO": "",
+  "ADJUNTADOC1": "fileID-retornado-por-DANA",
+  "FECHAULTIMOVALIDOC": "2026-07-28T20:15:00Z",
+  "ESTADO_VALIDOC": "COMPLETED",
+  "INTENTOS_VALIDOC": "",
+  "DOCUMENTO_DETECTADO": "V-5002012",
+  "NOMBRE_ARCHIVO_DOC": "cedula.pdf"
+}
+```
+
+Start Conversation de fallo envía el último resultado conocido:
+
+```json
+{
+  "TOMADOR_ID": "V-5002012",
+  "MOTIVOFALLO": "TOMADOR_MISMATCH",
+  "ADJUNTADOC1": "",
+  "FECHAULTIMOVALIDOC": "2026-07-28T20:15:00Z",
+  "ESTADO_VALIDOC": "VALIDATION_FAILED",
+  "INTENTOS_VALIDOC": "3",
+  "DOCUMENTO_DETECTADO": "E-5002012",
+  "NOMBRE_ARCHIVO_DOC": "cedula.pdf"
 }
 ```

@@ -5,10 +5,10 @@
 El usuario abre un enlace enviado por DANAconnect:
 
 ```text
-/completar-expediente?tomadorId=...&token=...
+/completar-expediente
 ```
 
-`tomadorId` identifica el registro en DANAconnect. El token viaja como bearer token hacia la Lambda.
+El HTML no incluye `TOMADOR_ID` ni token en query parameters. El external trigger de DANA entrega el identificador real de Data Retrieval al portal.
 
 ## Consulta del expediente
 
@@ -29,16 +29,16 @@ Cada intento:
 
 1. Envía el archivo a la Lambda en Base64.
 2. La Lambda valida tipo y tamaño.
-3. Bedrock Sonnet evalúa legibilidad, tipo de documento y número detectado.
-4. La Lambda compara el número detectado contra `NoCedula`.
+3. Bedrock Sonnet evalúa legibilidad, tipo de documento e identificador detectado.
+4. La Lambda compara nacionalidad más número contra `TOMADOR_ID`. La coincidencia debe ser exacta.
 
 ## Fallos
 
-No se registra cada intento fallido en DANA.
+No se guarda un historial de cada intento fallido en DANA.
 
-Si falla el intento 1 o 2, el portal solo muestra el motivo y permite intentar de nuevo.
+Si falla un intento, la Lambda actualiza los campos del último resultado conocido: `MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC` y `FECHAULTIMOVALIDOC`. Si el cliente abandona después del primer intento, DANA conserva ese último motivo.
 
-Si falla el tercer intento, la Lambda dispara una sola vez el flujo de refuerzo por Start Conversation con el motivo final:
+El portal permite continuar mientras queden intentos disponibles. Si falla el tercer intento, el estado queda cerrado como `VALIDATION_FAILED`.
 
 - `UNREADABLE_DOCUMENT`
 - `NOT_IDENTITY_DOCUMENT`
@@ -48,7 +48,7 @@ Si falla el tercer intento, la Lambda dispara una sola vez el flujo de refuerzo 
 
 Si el documento es válido:
 
-1. La Lambda sube el archivo con File Upload API.
+1. La Lambda sube el archivo con File Upload API. Esta llamada solo ocurre después de que la validación sea correcta.
 2. DANAconnect retorna `fileID`.
 3. La Lambda dispara el flujo de éxito por Start Conversation.
 4. El frontend muestra la confirmación final.

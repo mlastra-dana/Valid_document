@@ -38,11 +38,9 @@ DANA_USERNAME = os.environ.get("DANA_USERNAME", "")
 DANA_PASSWORD = os.environ.get("DANA_PASSWORD", "")
 DANA_OAUTH_SCOPE = os.environ.get("DANA_OAUTH_SCOPE", "")
 VALIDOC_DATA_FIELDS = (
-    "Titular_ID,NombreTitular,Correo_Titular,Telefono_Titular,NoCedula,Producto,"
-    "Correo_Interno,FechaUltimoValidaDoc,ProcesaValidaDoc1,EnviadoValidaDoc,"
-    "AperturaValidaDoc,ReboteValidaDoc,FiltradoValidaDoc,IrConsigna,ConsignaDoc,"
-    "ConsignaDocADS,EstadoConsignaDoc,MotivoFallidoDoc,IntentosValidaDoc,"
-    "DocumentoDetectado,NombreArchivoCedula,FechaConsignaDoc"
+    "ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,"
+    "FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,"
+    "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID"
 )
 DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
 DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "basic").lower()
@@ -52,13 +50,14 @@ DANA_FAILURE_PROJECT_ID = os.environ.get("DANA_FAILURE_PROJECT_ID", "")
 DANA_CONVERSATION_DEBUG = os.environ.get("DANA_CONVERSATION_DEBUG", "0")
 DANA_TIMEOUT_SECONDS = int(os.environ.get("DANA_TIMEOUT_SECONDS", "20"))
 
-FIELD_TOMADOR_ID = "Titular_ID"
-FIELD_STATUS = "EstadoConsignaDoc"
-FIELD_REASON_CODE = "MotivoFallidoDoc"
-FIELD_ATTEMPTS_USED = "IntentosValidaDoc"
-FIELD_FILE_ID = "ConsignaDocADS"
-FIELD_FILE_NAME = "NombreArchivoCedula"
-FIELD_DETECTED_DOCUMENT = "DocumentoDetectado"
+FIELD_TOMADOR_ID = "TOMADOR_ID"
+FIELD_REASON_CODE = "MOTIVOFALLO"
+FIELD_FILE_ID = "ADJUNTADOC1"
+FIELD_UPDATED_AT = "FECHAULTIMOVALIDOC"
+FIELD_STATUS = "ESTADO_VALIDOC"
+FIELD_ATTEMPTS_USED = "INTENTOS_VALIDOC"
+FIELD_DETECTED_DOCUMENT = "DOCUMENTO_DETECTADO"
+FIELD_FILE_NAME = "NOMBRE_ARCHIVO_DOC"
 
 BEDROCK_REGION = os.environ.get("BEDROCK_REGION") or os.environ.get("AWS_REGION", "us-east-1")
 BEDROCK_MODEL_ID = os.environ.get(
@@ -347,12 +346,10 @@ def retrieve_tomador(tomador_id, portal_token):
     if isinstance(data, list):
         data = data[0] if data else {}
 
-    documento = get_first_value(
+    expected_tomador_id = get_first_value(data, "TOMADOR_ID", "tomadorId", "TOMADORID") or tomador_id
+    cedula_tomador = get_first_value(
         data,
-        "numeroDocumentoEsperado",
-        "NUMERODOCUMENTOESPERADO",
-        "NoCedula",
-        "NOCEDULA",
+        "CEDULA_TOMADOR",
         "CEDULA",
         "DOCUMENTO",
         "IDENTIFICACION",
@@ -360,29 +357,34 @@ def retrieve_tomador(tomador_id, portal_token):
     )
 
     return {
-        "tomadorId": get_first_value(
-            data, "tomadorId", "TOMADORID", "Titular_ID", "TITULAR_ID", "dana", "danaParam"
-        )
-        or tomador_id,
+        "tomadorId": expected_tomador_id,
+        "dataId": tomador_id,
         "nombreTomador": get_first_value(
             data,
             "nombreTomador",
             "NOMBRETOMADOR",
-            "NombreTitular",
-            "NOMBRETITULAR",
             "NOMBRE",
             "NOMBRECLIENTE",
             "CLIENTE",
         ),
         "tipoPersona": get_first_value(data, "tipoPersona", "TIPOPERSONA") or "natural",
-        "numeroDocumentoEsperado": documento,
+        "numeroDocumentoEsperado": expected_tomador_id,
+        "cedulaTomador": cedula_tomador,
         "expedienteCompletado": parse_bool(
             get_first_value(
-                data, "expedienteCompletado", "EXPEDIENTECOMPLETADO", "ConsignaDoc", "CONSIGNADOC"
+                data,
+                "expedienteCompletado",
+                "EXPEDIENTECOMPLETADO",
+                "ConsignaDoc",
+                "CONSIGNADOC",
+                "ADJUNTADOC1",
             )
         ),
         "fechaCompletado": get_first_value(
-            data, "fechaCompletado", "FECHACOMPLETADO", "FechaConsignaDoc", "FECHACONSIGNADOC"
+            data,
+            "fechaCompletado",
+            "FECHACOMPLETADO",
+            "FECHAULTIMOVALIDOC",
         ),
         "intentosRealizados": int(
             get_first_value(
@@ -413,12 +415,13 @@ def start_project_conversation(project_id, fields, portal_token):
 def build_result_fields(tomador_id, payload):
     return {
         FIELD_TOMADOR_ID: tomador_id,
-        FIELD_STATUS: payload.get("status", ""),
         FIELD_REASON_CODE: payload.get("reasonCode", ""),
-        FIELD_ATTEMPTS_USED: str(payload.get("attemptsUsed", "")),
         FIELD_FILE_ID: payload.get("fileID", ""),
-        FIELD_FILE_NAME: payload.get("fileName", ""),
+        FIELD_UPDATED_AT: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        FIELD_STATUS: payload.get("status", ""),
+        FIELD_ATTEMPTS_USED: str(payload.get("attemptsUsed", "")),
         FIELD_DETECTED_DOCUMENT: payload.get("detectedDocumentNumber", ""),
+        FIELD_FILE_NAME: payload.get("fileName", ""),
     }
 
 
@@ -481,7 +484,7 @@ def upload_document(payload, portal_token):
             payload["tomadorId"],
             {
                 "status": "COMPLETED",
-                "reasonCode": "VALID_DOCUMENT",
+                "reasonCode": "",
                 "fileID": file_id,
                 "fileName": upload_result.get("fileName") or payload["document"]["fileName"],
                 "detectedDocumentNumber": payload.get("detectedDocumentNumber"),
@@ -517,12 +520,14 @@ def build_bedrock_content(document, expected_document_number):
     prompt = "\n".join(
         [
             "Analiza el archivo adjunto como documento de identidad.",
-            "Determina si es legible, si es una cédula de identidad venezolana y extrae el número.",
-            "No inventes datos. Si no puedes leer el número, usa null.",
+            "Determina si es legible, si es una cédula de identidad venezolana y extrae nacionalidad más número.",
+            "No inventes datos. Si no puedes leer la nacionalidad o el número, usa null.",
             "Responde únicamente JSON con estas claves:",
             "isReadable, isIdentityDocument, detectedDocumentNumber, reasonCode, message.",
+            "detectedDocumentNumber debe incluir nacionalidad y número cuando sean legibles, por ejemplo V-12345678 o E-1016824.",
             "reasonCode debe ser VALID_DOCUMENT, UNREADABLE_DOCUMENT, NOT_IDENTITY_DOCUMENT, TOMADOR_MISMATCH o VALIDATION_SERVICE_ERROR.",
-            f"Número esperado normalizado: {normalize_document_number(expected_document_number)}.",
+            f"Identificador esperado exacto normalizado: {normalize_document_number(expected_document_number)}.",
+            "La coincidencia solo es válida si nacionalidad y número coinciden exactamente con el identificador esperado.",
         ]
     )
 
@@ -604,12 +609,13 @@ def handle_validate_document(portal_token, payload):
         return invalid_response
 
     tomador_id = payload["tomadorId"]
-    expediente = retrieve_tomador(tomador_id, portal_token)
-    attempts_before = get_attempts(tomador_id, expediente)
+    data_id = payload.get("dataId") or tomador_id
+    expediente = retrieve_tomador(data_id, portal_token)
+    attempts_before = get_attempts(data_id, expediente)
     if attempts_before["remaining"] <= 0:
         return validation_response("MAX_ATTEMPTS_REACHED", attempts=attempts_before, status_code=429)
 
-    attempts = get_attempts(tomador_id, expediente, increment=True)
+    attempts = get_attempts(data_id, expediente, increment=True)
     try:
         validation = validate_with_bedrock(payload["document"], expediente.get("numeroDocumentoEsperado"))
     except Exception as error:

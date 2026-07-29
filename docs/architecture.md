@@ -44,7 +44,7 @@ Las variables de entorno se limitan a:
 
 - Credenciales DANAconnect.
 - Base URL y token URL.
-- Project IDs o conversation IDs de resultado.
+- Project IDs de resultado.
 - Configuración de Bedrock.
 - CORS, timeout y tamaño máximo.
 

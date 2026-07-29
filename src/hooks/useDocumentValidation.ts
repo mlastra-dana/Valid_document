@@ -94,6 +94,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         setStatus("validating");
         const response = await validateIdentityDocument(token, {
           tomadorId: expediente.tomadorId,
+          dataId: expediente.dataId,
           document
         });
 
@@ -101,13 +102,16 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         setValidationResult(response.validation);
 
         if (!response.validation.isValid) {
+          await registerExpedienteFailure(expediente.tomadorId, token, {
+            status: "VALIDATION_FAILED",
+            reasonCode: response.validation.reasonCode,
+            attemptsUsed: response.attempts.used,
+            detectedDocumentNumber: response.validation.detectedDocumentNumber,
+            fileName: selected.file.name
+          });
+
           if (response.attempts.remaining <= 0 || response.validation.reasonCode === "MAX_ATTEMPTS_REACHED") {
             setStatus("max-attempts");
-            await registerExpedienteFailure(expediente.tomadorId, token, {
-              status: "VALIDATION_FAILED",
-              reasonCode: response.validation.reasonCode,
-              attemptsUsed: response.attempts.used
-            });
             return;
           }
 
@@ -135,7 +139,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         setStatus("service-error");
       }
     },
-    [attempts.remaining, expediente.tomadorId, processing, token]
+    [attempts.remaining, expediente.dataId, expediente.tomadorId, processing, token]
   );
 
   return {

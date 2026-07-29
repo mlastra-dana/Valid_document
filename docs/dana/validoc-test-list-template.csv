@@ -1,6 +1,4 @@
-Titular_ID,NombreTitular,Correo_Titular,Telefono_Titular,NoCedula,Producto,Correo_Interno,FechaUltimoValidaDoc,ProcesaValidaDoc1,EnviadoValidaDoc,AperturaValidaDoc,ReboteValidaDoc,FiltradoValidaDoc,IrConsigna,ConsignaDoc,ConsignaDocADS,EstadoConsignaDoc,MotivoFallidoDoc,IntentosValidaDoc,DocumentoDetectado,NombreArchivoCedula,FechaConsignaDoc
-V-5002012,DORIS ZENI DIAZ,doris.prueba@example.com,412332281,5002012,Global Benefits,validoc-interno@example.com,,,,,,,,,,,,,,,
-V-7095418,ANNELIESE DEL CARMEN,joseph.prueba@example.com,4165438657,7095418,Global Benefits,validoc-interno@example.com,,,,,,,,,,,,,,,
-V-11565974,RONALD VASQUEZ,ronald.prueba@example.com,4142851203,11565974,Global Benefits,validoc-interno@example.com,,,,,,,,,,,,,,,
-V-12351279,MARIA MILIANI,maria.prueba@example.com,4147237333,12351279,Global Benefits,validoc-interno@example.com,,,,,,,,,,,,,,,
-V-14127265,EMIR NORAIDA,nora.prueba@example.com,4242748134,14127265,Global Benefits,validoc-interno@example.com,,,,,,,,,,,,,,,
+ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID
+,5002012,,doris.prueba@example.com,,,,,DORIS ZENI DIAZ,,Global Benefits,412332281,V-5002012,1
+,1016824,,luis.prueba@example.com,,,,,LUIS GAYOSO,,Global Benefits,4165438657,E-1016824,2
+,1021191,,teresa.prueba@example.com,,,,,TERESA PIMENTEL,,Global Benefits,4142851203,E-1021191,3

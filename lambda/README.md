@@ -34,7 +34,7 @@ Python 3.12
 4. La Lambda invoca Bedrock Sonnet para leer el documento.
 5. La Lambda compara la cédula detectada con la esperada por DANA.
 6. Si es válida, sube el documento con el API Upload de DANAconnect.
-7. Si se agotan los tres intentos, registra una sola vez el motivo final para que DANAconnect continúe el flujo de refuerzo.
+7. Si una validación falla, registra el último motivo conocido en DANA para cubrir abandono del cliente.
 
 ## Variables de entorno
 
@@ -76,7 +76,7 @@ POST /api/2.0/rest/conversation/ProjectID/{projectId}/start/data
 
 Configura `DANA_SUCCESS_PROJECT_ID` para el resultado exitoso y `DANA_FAILURE_PROJECT_ID` para el flujo de fallo/refuerzo. El disparo se hace por `ProjectID` para mantener el mismo criterio entre ambientes.
 
-La Lambda no registra cada intento fallido; solo dispara el flujo de fallo cuando el tercer intento queda agotado, enviando el motivo final (`UNREADABLE_DOCUMENT`, `NOT_IDENTITY_DOCUMENT` o `TOMADOR_MISMATCH`).
+La Lambda no guarda un historial de intentos fallidos. Actualiza los campos del último fallo conocido (`MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC`) desde el primer intento fallido.
 
 ## Endpoints expuestos por Function URL
 

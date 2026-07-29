@@ -161,11 +161,11 @@ const PendingExpediente = ({
 
 export const CompleteExpedientePage = () => {
   const [params] = useSearchParams();
-  const tomadorId = params.get("tomadorId");
-  const token = params.get("token");
-  const { expediente, loading, error, retry } = useExpediente(tomadorId, token);
+  const danaId = params.get("dana") || params.get("danaparam") || params.get("tomadorId");
+  const token = params.get("token") || danaId;
+  const { expediente, loading, error, retry } = useExpediente(danaId, token);
 
-  if (!tomadorId || !token) {
+  if (!danaId || !token) {
     return (
       <PageContainer>
         <ProcessStepper activeStep={1} />

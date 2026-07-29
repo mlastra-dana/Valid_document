@@ -52,7 +52,7 @@ npm run dev
 Modo demo:
 
 ```text
-http://localhost:5173/completar-expediente?tomadorId=ABC123&token=demo-token&scenario=success
+http://localhost:5173/completar-expediente?dana=ABC123&scenario=success
 ```
 
 ## Variables de entorno
@@ -93,8 +93,8 @@ Escenarios disponibles por query parameter:
 Ejemplos:
 
 ```text
-/completar-expediente?tomadorId=ABC123&token=demo-token&scenario=unreadable
-/completar-expediente?tomadorId=ABC123&token=demo-token&scenario=mismatch
+/completar-expediente?dana=ABC123&scenario=unreadable
+/completar-expediente?dana=ABC123&scenario=mismatch
 ```
 
 ## Comandos
@@ -191,7 +191,7 @@ Responsabilidades:
 - Invocar Amazon Bedrock Sonnet para validar legibilidad, tipo de documento y número detectado.
 - Comparar el número detectado contra el esperado del tomador.
 - Usar File Upload API de DANAconnect para subir la cédula validada.
-- Disparar Start Conversation v2 una sola vez: al éxito o al agotarse el tercer intento fallido.
+- Disparar Start Conversation v2 al éxito y actualizar en DANA el último fallo conocido cuando una validación no pasa.
 
 Variables del backend:
 
@@ -223,6 +223,7 @@ Documentación adicional:
 - [Arquitectura](/Users/marialastra/Documents/Valid_document/docs/architecture.md)
 - [Proceso Validoc](/Users/marialastra/Documents/Valid_document/docs/process.md)
 - [Lista DANA de pruebas](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-test-list-fields.md)
+- [Email Validoc](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-email-flow.md)
 
 ## Integración con DANAconnect
 
@@ -279,10 +280,10 @@ VITE_USE_MOCK_API=false
 Para probar este demo ya integrado:
 
 1. Desplegar la Lambda con Function URL.
-2. Configurar en la Lambda `DANA_BASE_URL`, credenciales de Data Retrieval/File Upload y los conversation IDs de resultado.
+2. Configurar en la Lambda `DANA_BASE_URL`, credenciales de Data Retrieval/File Upload y los Project IDs de resultado.
 3. Configurar permisos IAM para invocar Bedrock Sonnet.
 4. Configurar en Amplify `VITE_API_BASE_URL` con la Function URL.
-5. Abrir `/completar-expediente?tomadorId=ABC123&token=TOKEN_REAL`.
+5. Abrir desde el external trigger de DANA para que viaje el identificador real de Data Retrieval.
 
 ## Rewrite para React Router
 

@@ -11,7 +11,7 @@ DANA_OAUTH_SCOPE,,No,OAuth,Scope requerido por DANAconnect si aplica.
 DANA_OAUTH_AUTH_METHOD,basic,No,OAuth,Metodo para enviar client credentials al token endpoint. Usar basic o body.
 DANA_FIELDS_QUERY_PARAM,fieldList,No,Data Retrieval v2,Nombre del query parameter para campos cuando se use v2 Bearer.
 DANA_SUCCESS_PROJECT_ID,,Recomendado para notificar exito,Conversation API,Project ID del flujo a iniciar cuando el documento se valida y sube correctamente.
-DANA_FAILURE_PROJECT_ID,,Recomendado para notificar fallo,Conversation API,Project ID del flujo a iniciar una sola vez cuando se agotan los tres intentos.
+DANA_FAILURE_PROJECT_ID,,Recomendado para actualizar fallo,Conversation API,Project ID del flujo que actualiza el ultimo fallo conocido cuando una validacion no pasa.
 DANA_CONVERSATION_DEBUG,0,No,DANAconnect,Header X-DEBUG para llamadas a Conversation API y File Upload.
 DANA_TIMEOUT_SECONDS,20,No,DANAconnect,Timeout en segundos para llamadas HTTP a DANAconnect.
 BEDROCK_REGION,us-east-1,Si,Bedrock,Region AWS donde se invoca Bedrock.

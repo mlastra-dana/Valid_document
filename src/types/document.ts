@@ -32,6 +32,7 @@ export interface EncodedDocument {
 
 export interface DocumentValidationPayload {
   tomadorId: string;
+  dataId?: string;
   document: EncodedDocument;
 }
 
@@ -59,6 +60,8 @@ export interface FinalFailurePayload {
   status: "VALIDATION_FAILED";
   reasonCode: ValidationReasonCode;
   attemptsUsed: number;
+  detectedDocumentNumber?: string | null;
+  fileName?: string;
 }
 
 export interface SelectedDocumentFile {
