@@ -33,9 +33,11 @@ Python 3.12
 3. La Lambda conserva `UID` como `recordUid` de trazabilidad del registro.
 4. La Lambda recibe la cédula en Base64 y valida tipo/tamaño.
 5. La Lambda invoca Bedrock Sonnet para leer el documento usando el `TOMADOR_ID` ya obtenido del expediente.
-6. La Lambda compara la cédula detectada con la esperada por DANA.
-7. Si es válida, sube el documento con el API Upload de DANAconnect.
-8. Si una validación falla, registra el último motivo conocido en DANA para cubrir abandono del cliente.
+6. La Lambda toma el consumo de tokens de la respuesta de Bedrock.
+7. Si `DANA_TOKEN_AUDIT_PROJECT_ID` está configurado, registra esos tokens en otra lista DANA con Start Conversation por ProjectID.
+8. La Lambda compara la cédula detectada con la esperada por DANA.
+9. Si es válida, sube el documento con el API Upload de DANAconnect.
+10. Si una validación falla, registra el último motivo conocido en DANA para cubrir abandono del cliente.
 
 ## Variables de entorno
 
@@ -54,6 +56,8 @@ DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ES
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_CONVERSATION_DEBUG=0
+DANA_TOKEN_AUDIT_PROJECT_ID=
+DANA_TOKEN_AUDIT_FIELDS_JSON=
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
@@ -68,6 +72,16 @@ Para Data Retrieval hay dos caminos:
 `DANA_DATA_FIELDS` controla los campos leídos desde `POC_VALIDOC`. Si agregas un campo de solo lectura, puedes actualizar esta variable sin tocar código. Para la regla global por cliente, debe incluir `TOMADOR_ID_COMPLETADO` o un alias soportado.
 
 Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
+
+Para registrar tokens de Bedrock en otra lista DANA, configura `DANA_TOKEN_AUDIT_PROJECT_ID` con el ProjectID de esa conversación/lista. La Lambda llama:
+
+```text
+POST /api/2.0/rest/conversation/ProjectID/{projectId}/start/data
+```
+
+El cuerpo son los campos de auditoría. Por defecto usa `DATA_ID`, `LAMBDA_NAME`, `MODEL_ID`, `NOMBRE_ARCHIVO_DOC`, `RESULTADO_VALIDOC`, `TOKENS_TOTALES`, `TOKEN_INPUT`, `TOKEN_OUTPUT`, `TOMADOR_ID` y `VALIDOC_UID`. `LAMBDA_NAME` se toma automáticamente de `AWS_LAMBDA_FUNCTION_NAME`; no requiere variable manual. Si la lista DANA usa otros códigos, ajusta `DANA_TOKEN_AUDIT_FIELDS_JSON` sin tocar código. Los campos `UID/idrow` y `FECHA` de `Bedrock_logs` no los envía la Lambda; `FECHA` la llena el flujo DANA con un nodo update.
+
+El registro de tokens es no bloqueante: si Start Conversation falla, se deja traza en CloudWatch pero no se interrumpe la validación del documento. Se registra cada respuesta de Bedrock, tanto validaciones exitosas como fallidas. Si Bedrock falla sin devolver `usage`, se registra `RESULTADO_VALIDOC=VALIDATION_SERVICE_ERROR` con tokens en `0`.
 
 Para File Upload se usa `POST /dana/conversation/http/rest/file/upload` con `multipart/form-data`, campo `file` y Basic Auth (`DANA_USERNAME`/`DANA_PASSWORD`). La respuesta esperada incluye `fileID`, que luego se escribe en `ADJUNTADOC1`.
 

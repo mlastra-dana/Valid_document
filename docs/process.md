@@ -51,7 +51,11 @@ Cada intento:
 1. Envía el archivo a la Lambda en Base64.
 2. La Lambda valida tipo y tamaño.
 3. Bedrock Sonnet evalúa legibilidad, tipo de documento e identificador detectado.
-4. La Lambda compara nacionalidad más número contra `TOMADOR_ID`. La coincidencia debe ser exacta.
+4. La Lambda toma `input_tokens` y `output_tokens` de la respuesta de Bedrock.
+5. Si `DANA_TOKEN_AUDIT_PROJECT_ID` está configurado, registra esa auditoría en otra lista DANA usando Start Conversation por ProjectID.
+6. La Lambda compara nacionalidad más número contra `TOMADOR_ID`. La coincidencia debe ser exacta.
+
+La auditoría de tokens no modifica el expediente de Validoc y no bloquea al usuario. Si DANA no recibe el registro de tokens por un error temporal, la validación continúa y el fallo queda en CloudWatch.
 
 Después de abrir el expediente, la validación usa el `TOMADOR_ID` ya obtenido y no vuelve a consultar Data Retrieval antes de Bedrock. Esto permite que el cliente tenga más margen para corregir y subir el documento dentro de la misma sesión del portal.
 

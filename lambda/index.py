@@ -50,7 +50,10 @@ DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
 DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "basic").lower()
 VALIDOC_FILE_UPLOAD_PATH = "/dana/conversation/http/rest/file/upload"
 DANA_CONVERSATION_DEBUG = os.environ.get("DANA_CONVERSATION_DEBUG", "0")
+DANA_TOKEN_AUDIT_PROJECT_ID = os.environ.get("DANA_TOKEN_AUDIT_PROJECT_ID", "")
+DANA_TOKEN_AUDIT_FIELDS_JSON = os.environ.get("DANA_TOKEN_AUDIT_FIELDS_JSON", "")
 DANA_TIMEOUT_SECONDS = int(os.environ.get("DANA_TIMEOUT_SECONDS", "20"))
+LAMBDA_NAME = os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "validoc-lambda")
 
 FIELD_TOMADOR_ID = "TOMADOR_ID"
 FIELD_REASON_CODE = "MOTIVOFALLO"
@@ -72,6 +75,18 @@ ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 
 _TOKEN_CACHE = {"access_token": "", "expires_at": 0}
 _ATTEMPTS_CACHE = {}
+DEFAULT_TOKEN_AUDIT_FIELD_MAP = {
+    "dataId": "DATA_ID",
+    "lambdaName": "LAMBDA_NAME",
+    "recordUid": "VALIDOC_UID",
+    "tomadorId": "TOMADOR_ID",
+    "modelId": "MODEL_ID",
+    "inputTokens": "TOKEN_INPUT",
+    "outputTokens": "TOKEN_OUTPUT",
+    "totalTokens": "TOKENS_TOTALES",
+    "reasonCode": "RESULTADO_VALIDOC",
+    "fileName": "NOMBRE_ARCHIVO_DOC",
+}
 
 
 def log_event(event_name, **fields):
@@ -410,6 +425,7 @@ def dana_headers(portal_token):
         "Accept": "application/json",
         "Authorization": f"Bearer {get_dana_access_token(portal_token)}",
         "X-Portal-Token": portal_token,
+        "X-DEBUG": DANA_CONVERSATION_DEBUG,
     }
 
 
@@ -428,6 +444,94 @@ def post_json(url, payload, portal_token):
 def get_json(url, headers):
     request = urllib.request.Request(url, method="GET", headers=headers)
     return send_request(request)
+
+
+def start_conversation_project_url(project_id):
+    encoded_project_id = urllib.parse.quote(str(project_id), safe="")
+    return f"{DANA_BASE_URL}/api/2.0/rest/conversation/ProjectID/{encoded_project_id}/start/data"
+
+
+def token_audit_field_map():
+    if not DANA_TOKEN_AUDIT_FIELDS_JSON:
+        return DEFAULT_TOKEN_AUDIT_FIELD_MAP
+    try:
+        custom_map = json.loads(DANA_TOKEN_AUDIT_FIELDS_JSON)
+    except json.JSONDecodeError:
+        log_event("token_audit_field_map_invalid")
+        return DEFAULT_TOKEN_AUDIT_FIELD_MAP
+    if not isinstance(custom_map, dict):
+        log_event("token_audit_field_map_invalid", reason="not_object")
+        return DEFAULT_TOKEN_AUDIT_FIELD_MAP
+    return {**DEFAULT_TOKEN_AUDIT_FIELD_MAP, **custom_map}
+
+
+def parse_bedrock_token_usage(decoded_response):
+    usage = decoded_response.get("usage") or {}
+    input_tokens = int(usage.get("input_tokens") or usage.get("inputTokens") or 0)
+    output_tokens = int(usage.get("output_tokens") or usage.get("outputTokens") or 0)
+    total_tokens = int(usage.get("total_tokens") or usage.get("totalTokens") or input_tokens + output_tokens)
+    return {
+        "inputTokens": input_tokens,
+        "outputTokens": output_tokens,
+        "totalTokens": total_tokens,
+    }
+
+
+def build_token_audit_fields(context, validation, token_usage):
+    field_map = token_audit_field_map()
+    values = {
+        "dataId": context.get("dataId", ""),
+        "lambdaName": LAMBDA_NAME,
+        "recordUid": context.get("recordUid", ""),
+        "tomadorId": context.get("tomadorId", ""),
+        "modelId": BEDROCK_MODEL_ID,
+        "inputTokens": str(token_usage.get("inputTokens", 0)),
+        "outputTokens": str(token_usage.get("outputTokens", 0)),
+        "totalTokens": str(token_usage.get("totalTokens", 0)),
+        "reasonCode": validation.get("reasonCode", ""),
+        "reasonLabel": dana_reason_label(validation.get("reasonCode", "")),
+        "detectedDocument": validation.get("detectedDocumentNumber") or "",
+        "fileName": context.get("fileName", ""),
+    }
+    return {
+        field_code: values[key]
+        for key, field_code in field_map.items()
+        if field_code and key in values
+    }
+
+
+def record_bedrock_token_usage(portal_token, context, validation, token_usage):
+    if not DANA_TOKEN_AUDIT_PROJECT_ID:
+        return
+    fields = build_token_audit_fields(context, validation, token_usage)
+    log_event(
+        "token_audit_start_conversation_request",
+        projectId=DANA_TOKEN_AUDIT_PROJECT_ID,
+        dataIdPreview=preview_value(context.get("dataId")),
+        recordUid=str(context.get("recordUid") or ""),
+        totalTokens=token_usage.get("totalTokens", 0),
+        fields=list(fields.keys()),
+    )
+    try:
+        result = post_json(
+            start_conversation_project_url(DANA_TOKEN_AUDIT_PROJECT_ID),
+            fields,
+            portal_token,
+        )
+        log_event(
+            "token_audit_start_conversation_response",
+            projectId=DANA_TOKEN_AUDIT_PROJECT_ID,
+            dataIdPreview=preview_value(context.get("dataId")),
+            resultShape=summarize_data_shape(result),
+        )
+    except Exception as error:
+        log_event(
+            "token_audit_start_conversation_failed",
+            projectId=DANA_TOKEN_AUDIT_PROJECT_ID,
+            dataIdPreview=preview_value(context.get("dataId")),
+            errorType=type(error).__name__,
+            message=str(error)[:300],
+        )
 
 
 def build_data_retrieval_url(dana_identifier):
@@ -836,6 +940,7 @@ def validate_with_bedrock(document, expected_document_number):
         body=json.dumps(payload),
     )
     decoded = json.loads(result["body"].read().decode("utf-8"))
+    token_usage = parse_bedrock_token_usage(decoded)
     text = next((part.get("text") for part in decoded.get("content", []) if part.get("type") == "text"), "{}")
     model_result = extract_model_json(text)
 
@@ -855,8 +960,11 @@ def validate_with_bedrock(document, expected_document_number):
         "bedrock_validation_result",
         reasonCode=reason_code,
         detectedPreview=preview_value(detected),
+        inputTokens=token_usage.get("inputTokens"),
+        outputTokens=token_usage.get("outputTokens"),
+        totalTokens=token_usage.get("totalTokens"),
     )
-    return validation_result(reason_code, detected or None)
+    return validation_result(reason_code, detected or None), token_usage
 
 
 def handle_get_expediente(path, portal_token):
@@ -869,7 +977,6 @@ def handle_get_expediente(path, portal_token):
 
 
 def handle_validate_document(portal_token, payload):
-    del portal_token
     invalid_response = validate_document_payload(payload)
     if invalid_response:
         return invalid_response
@@ -888,12 +995,23 @@ def handle_validate_document(portal_token, payload):
         source="payload",
     )
     try:
-        validation = validate_with_bedrock(payload["document"], tomador_id)
+        validation, token_usage = validate_with_bedrock(payload["document"], tomador_id)
     except Exception as error:
         log_event(
             "bedrock_validation_failed",
             errorType=type(error).__name__,
             message=str(error)[:500],
+        )
+        record_bedrock_token_usage(
+            portal_token,
+            {
+                "dataId": data_id,
+                "recordUid": payload.get("recordUid", ""),
+                "tomadorId": tomador_id,
+                "fileName": payload["document"].get("fileName", ""),
+            },
+            validation_result("VALIDATION_SERVICE_ERROR"),
+            {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0},
         )
         raise AppError(
             502,
@@ -901,6 +1019,17 @@ def handle_validate_document(portal_token, payload):
             "No pudimos completar la validación en este momento.",
         )
 
+    record_bedrock_token_usage(
+        portal_token,
+        {
+            "dataId": data_id,
+            "recordUid": payload.get("recordUid", ""),
+            "tomadorId": tomador_id,
+            "fileName": payload["document"].get("fileName", ""),
+        },
+        validation,
+        token_usage,
+    )
     attempts = get_attempts_from_payload(data_id, payload, increment=True)
     return response(200, {"success": True, "validation": validation, "attempts": attempts})
 

@@ -214,6 +214,7 @@ Responsabilidades:
 - Recibir las rutas REST consumidas por el frontend.
 - Usar el API Data Retrieval de DANAconnect para consultar el tomador.
 - Invocar Amazon Bedrock Sonnet para validar legibilidad, tipo de documento y número detectado.
+- Registrar tokens de Bedrock en una lista DANA separada mediante Start Conversation por ProjectID, si `DANA_TOKEN_AUDIT_PROJECT_ID` está configurado.
 - Comparar el número detectado contra el esperado del tomador.
 - Usar File Upload API de DANAconnect para subir la cédula validada.
 - Actualizar el mismo registro en DANA con Trigger usando el `dataId` del enlace y registrar el `UID` en logs de trazabilidad.
@@ -235,6 +236,8 @@ DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ES
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_CONVERSATION_DEBUG=0
+DANA_TOKEN_AUDIT_PROJECT_ID=
+DANA_TOKEN_AUDIT_FIELDS_JSON=
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
@@ -249,6 +252,7 @@ Documentación adicional:
 - [Arquitectura](/Users/marialastra/Documents/Valid_document/docs/architecture.md)
 - [Proceso Validoc](/Users/marialastra/Documents/Valid_document/docs/process.md)
 - [Lista DANA de pruebas](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-test-list-fields.md)
+- [Lista DANA de auditoría de tokens](/Users/marialastra/Documents/Valid_document/docs/dana/token-audit-list-fields.md)
 - [Email Validoc](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-email-flow.md)
 
 ## Integración con DANAconnect

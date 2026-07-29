@@ -8,6 +8,7 @@
 - Amazon Bedrock Sonnet para validar la cédula.
 - DANAconnect File Upload API para subir el documento aprobado.
 - DANAconnect Trigger para actualizar el mismo registro de `POC_VALIDOC`.
+- DANAconnect Start Conversation por ProjectID para registrar auditoría de tokens en una lista separada, cuando esté configurado.
 
 ## Flujo
 
@@ -18,6 +19,7 @@ DANAconnect email
 -> Lambda Function URL
 -> Data Retrieval
 -> Bedrock Sonnet
+-> Start Conversation ProjectID para auditoría de tokens
 -> File Upload
 -> Trigger update sobre el mismo registro
 ```
