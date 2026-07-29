@@ -173,6 +173,57 @@ def summarize_data_shape(value):
     return {"type": type(value).__name__}
 
 
+def get_case_insensitive(data, key):
+    if not isinstance(data, dict):
+        return None
+
+    key_lower = str(key).lower()
+    for current_key, value in data.items():
+        if str(current_key).lower() == key_lower:
+            return value
+    return None
+
+
+def extract_field(data, code):
+    if not isinstance(data, dict):
+        return ""
+
+    candidates = [get_case_insensitive(data, code)]
+    for container_key in ("record", "fields", "contact", "data", "tomador"):
+        container = data.get(container_key)
+        if isinstance(container, dict):
+            candidates.append(get_case_insensitive(container, code))
+
+    for value in candidates:
+        if value not in (None, ""):
+            return value
+    return ""
+
+
+def dana_error_message(data):
+    if not isinstance(data, dict):
+        return ""
+
+    ws_error = data.get("wsError")
+    if isinstance(ws_error, dict):
+        return str(
+            ws_error.get("errorDescription")
+            or ws_error.get("message")
+            or ws_error.get("errorCode")
+            or ws_error
+        )
+    if ws_error:
+        return str(ws_error)
+
+    error = data.get("error")
+    if isinstance(error, dict):
+        return str(error.get("errorDescription") or error.get("message") or error)
+    if error:
+        return str(error)
+
+    return ""
+
+
 def get_extension(file_name):
     guessed = mimetypes.guess_type(file_name or "")[0]
     _, extension = os.path.splitext(file_name or "")
@@ -365,11 +416,7 @@ def build_start_project_conversation_url(project_id):
 
 def get_first_value(data, *keys):
     for key in keys:
-        if key in data and data[key] not in (None, ""):
-            return data[key]
-    upper_data = {str(key).upper(): value for key, value in data.items()}
-    for key in keys:
-        value = upper_data.get(str(key).upper())
+        value = extract_field(data, key)
         if value not in (None, ""):
             return value
     return None
@@ -389,13 +436,29 @@ def retrieve_tomador(tomador_id, portal_token):
         dataIdPreview=preview_value(tomador_id),
         authMode="basic" if use_dana_basic_auth() else "bearer",
         fieldsCount=len([field for field in DANA_DATA_FIELDS.split(",") if field.strip()]),
+        hasTomadorIdField="TOMADOR_ID" in DANA_DATA_FIELDS,
     )
     body = get_json(data_url, headers)
     log_event("data_retrieval_response_shape", shape=summarize_data_shape(body))
-    data = body.get("data") or body.get("tomador") or body
+    dana_error = dana_error_message(body)
+    if dana_error:
+        log_event(
+            "data_retrieval_ws_error",
+            dataIdPreview=preview_value(tomador_id),
+            message=dana_error[:300],
+        )
+        raise AppError(
+            404,
+            "EXPEDIENTE_NOT_FOUND",
+            "No encontramos el expediente asociado al enlace.",
+        )
+
+    data = body.get("data") or body.get("tomador") or body.get("record") or body
     if isinstance(data, list):
         data = data[0] if data else {}
     log_event("data_retrieval_data_shape", shape=summarize_data_shape(data))
+    if "record" in body:
+        log_event("data_retrieval_record_shape", shape=summarize_data_shape(body.get("record")))
 
     expected_tomador_id = get_first_value(data, "TOMADOR_ID", "tomadorId", "TOMADORID") or tomador_id
     cedula_tomador = get_first_value(
