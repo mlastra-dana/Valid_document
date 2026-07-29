@@ -79,7 +79,7 @@ Para registrar tokens de Bedrock en otra lista DANA, configura `DANA_TOKEN_AUDIT
 POST /api/2.0/rest/conversation/ProjectID/{projectId}/start/data
 ```
 
-El cuerpo son los campos de auditoría. Por defecto usa `DATA_ID`, `LAMBDA_NAME`, `MODEL_ID`, `NOMBRE_ARCHIVO_DOC`, `RESULTADO_VALIDOC`, `TOKENS_TOTALES`, `TOKEN_INPUT`, `TOKEN_OUTPUT`, `TOMADOR_ID` y `VALIDOC_UID`. `LAMBDA_NAME` se toma automáticamente de `AWS_LAMBDA_FUNCTION_NAME`; no requiere variable manual. Si la lista DANA usa otros códigos, ajusta `DANA_TOKEN_AUDIT_FIELDS_JSON` sin tocar código. Los campos `UID/idrow` y `FECHA` de `Bedrock_logs` no los envía la Lambda; `FECHA` la llena el flujo DANA con un nodo update.
+El cuerpo son los campos de auditoría. Por defecto usa `DATA_ID`, `LAMBDA_NAME`, `MODEL_ID`, `NOMBRE_ARCHIVO_DOC`, `RESULTADO_VALIDOC`, `TOKENS_TOTALES`, `TOKEN_INPUT`, `TOKEN_OUTPUT` y `TOMADOR_ID`. `LAMBDA_NAME` se toma automáticamente de `AWS_LAMBDA_FUNCTION_NAME`; no requiere variable manual. Si la lista DANA usa otros códigos, ajusta `DANA_TOKEN_AUDIT_FIELDS_JSON` sin tocar código. Los campos `UID/idrow` y `FECHA` de `Bedrock_logs` no los envía la Lambda; `FECHA` la llena el flujo DANA con un nodo update.
 
 El registro de tokens es no bloqueante: si Start Conversation falla, se deja traza en CloudWatch pero no se interrumpe la validación del documento. Se registra cada respuesta de Bedrock, tanto validaciones exitosas como fallidas. Si Bedrock falla sin devolver `usage`, se registra `RESULTADO_VALIDOC=VALIDATION_SERVICE_ERROR` con tokens en `0`.
 

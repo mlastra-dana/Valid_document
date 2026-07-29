@@ -78,7 +78,6 @@ _ATTEMPTS_CACHE = {}
 DEFAULT_TOKEN_AUDIT_FIELD_MAP = {
     "dataId": "DATA_ID",
     "lambdaName": "LAMBDA_NAME",
-    "recordUid": "VALIDOC_UID",
     "tomadorId": "TOMADOR_ID",
     "modelId": "MODEL_ID",
     "inputTokens": "TOKEN_INPUT",
@@ -482,7 +481,6 @@ def build_token_audit_fields(context, validation, token_usage):
     values = {
         "dataId": context.get("dataId", ""),
         "lambdaName": LAMBDA_NAME,
-        "recordUid": context.get("recordUid", ""),
         "tomadorId": context.get("tomadorId", ""),
         "modelId": BEDROCK_MODEL_ID,
         "inputTokens": str(token_usage.get("inputTokens", 0)),

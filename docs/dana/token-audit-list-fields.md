@@ -47,8 +47,6 @@ Se registra cada respuesta de Bedrock, tanto resultados exitosos como fallidos. 
 
 `TOMADOR_ID`: identificador del cliente usado para validar la cédula.
 
-`VALIDOC_UID`: `UID` del registro de `POC_VALIDOC` cuando Data Retrieval lo entrega.
-
 `UID`: identificador interno/autonumérico de la lista `Bedrock_logs`. No lo envía la Lambda.
 
 `FECHA`: este campo existe en la lista, pero no lo envía la Lambda. Lo llena el flujo DANA con un nodo update.
@@ -61,7 +59,6 @@ La Lambda usa estos códigos por defecto:
 {
   "dataId": "DATA_ID",
   "lambdaName": "LAMBDA_NAME",
-  "recordUid": "VALIDOC_UID",
   "tomadorId": "TOMADOR_ID",
   "modelId": "MODEL_ID",
   "inputTokens": "TOKEN_INPUT",
