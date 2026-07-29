@@ -28,10 +28,10 @@ Python 3.12
 
 ## Flujo
 
-1. El frontend llama la Function URL con `Authorization: Bearer <token>`.
-2. La Lambda consulta el tomador en DANAconnect usando Data Retrieval.
+1. El frontend llama la Function URL con `Authorization: Bearer <dataId-del-enlace>`.
+2. La Lambda consulta el expediente en DANAconnect usando Data Retrieval.
 3. La Lambda recibe la cédula en Base64 y valida tipo/tamaño.
-4. La Lambda invoca Bedrock Sonnet para leer el documento.
+4. La Lambda invoca Bedrock Sonnet para leer el documento usando el `TOMADOR_ID` ya obtenido del expediente.
 5. La Lambda compara la cédula detectada con la esperada por DANA.
 6. Si es válida, sube el documento con el API Upload de DANAconnect.
 7. Si una validación falla, registra el último motivo conocido en DANA para cubrir abandono del cliente.
@@ -76,15 +76,15 @@ Para actualizar el registro existente se usa Trigger con el `dataId`/`dana` reci
 POST /event/Trigger?dana={dataId}&CAMPO=valor
 ```
 
-La Lambda no guarda un historial de intentos fallidos. Actualiza los campos del último fallo conocido (`MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC`) desde el primer intento fallido.
+La Lambda no guarda un historial de intentos fallidos. Actualiza los campos del último fallo conocido (`MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC`) desde el primer intento fallido. `MOTIVOFALLO` se escribe como texto legible para operaciones, por ejemplo `Documento no coincide con tomador`.
 
 ## Endpoints expuestos por Function URL
 
 ```http
-GET /expedientes/{tomadorId}
+GET /expedientes/{dataId}
 POST /documentos-identidad/validar
 POST /documentos-identidad/registrar
-POST /expedientes/{tomadorId}/resultado
+POST /expedientes/{dataId}/resultado
 ```
 
 Todos requieren:

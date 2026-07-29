@@ -10,7 +10,7 @@ docs/dana/validoc-test-list-template.csv
 
 ## Campos POC_VALIDOC
 
-`TOMADOR_ID`: identificador que viaja en el enlace como `tomadorId`. Es el valor esperado para validar coincidencia exacta contra Bedrock. Debe incluir nacionalidad y número. Ejemplo: `V-5002012` o `E-1016824`.
+`TOMADOR_ID`: identificador esperado para validar coincidencia exacta contra Bedrock. No viaja en el enlace; la Lambda lo obtiene desde Data Retrieval usando el `dataId` entregado por DANA. Debe incluir nacionalidad y número. Ejemplo: `V-5002012` o `E-1016824`.
 
 `NOMBRETOMADOR`: nombre visible en el portal.
 
@@ -32,7 +32,7 @@ docs/dana/validoc-test-list-template.csv
 
 `INTENTOS_VALIDOC`: cantidad de intentos usados al momento de la última validación fallida. No es un historial; se sobrescribe con el último intento conocido.
 
-`MOTIVOFALLO`: último motivo conocido de fallo. Se actualiza desde el primer intento fallido para cubrir abandono del cliente. Ejemplos: `UNREADABLE_DOCUMENT`, `NOT_IDENTITY_DOCUMENT`, `TOMADOR_MISMATCH`.
+`MOTIVOFALLO`: último motivo conocido de fallo. Se actualiza desde el primer intento fallido para cubrir abandono del cliente. Se guarda como texto operativo legible. Ejemplos: `Documento no legible`, `Archivo no es cedula de identidad`, `Documento no coincide con tomador`.
 
 `NOMBRE_ARCHIVO_DOC`: nombre del archivo seleccionado por el usuario. Es texto de auditoría; no sube ni guarda el archivo.
 
@@ -64,7 +64,7 @@ La actualización de fallo sobre el mismo registro envía el último resultado c
 ```json
 {
   "TOMADOR_ID": "V-5002012",
-  "MOTIVOFALLO": "TOMADOR_MISMATCH",
+  "MOTIVOFALLO": "Documento no coincide con tomador",
   "ADJUNTADOC1": "",
   "FECHAULTIMOVALIDOC": "2026-07-28T20:15:00Z",
   "ESTADO_VALIDOC": "VALIDATION_FAILED",

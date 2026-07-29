@@ -143,15 +143,15 @@ La Lambda queda preparada para desplegarse con Function URL y documenta las vari
 Consulta inicial:
 
 ```http
-GET /expedientes/{tomadorId}
-Authorization: Bearer {token}
+GET /expedientes/{dataId}
+Authorization: Bearer {dataId-del-enlace}
 ```
 
 Validación:
 
 ```http
 POST /documentos-identidad/validar
-Authorization: Bearer {token}
+Authorization: Bearer {dataId-del-enlace}
 Content-Type: application/json
 ```
 
@@ -159,15 +159,15 @@ Registro documental:
 
 ```http
 POST /documentos-identidad/registrar
-Authorization: Bearer {token}
+Authorization: Bearer {dataId-del-enlace}
 Content-Type: application/json
 ```
 
 Resultado fallido:
 
 ```http
-POST /expedientes/{tomadorId}/resultado
-Authorization: Bearer {token}
+POST /expedientes/{dataId}/resultado
+Authorization: Bearer {dataId-del-enlace}
 Content-Type: application/json
 ```
 
@@ -228,7 +228,7 @@ Documentación adicional:
 
 ## Integración con DANAconnect
 
-DANAconnect genera el enlace, proporciona `tomadorId`, envía comunicaciones iniciales, recordatorios y refuerzos. El portal informa resultados al backend para que DANAconnect continúe el flujo correspondiente.
+DANAconnect genera el enlace y entrega el `dataId` que permite leer el expediente con Data Retrieval. `TOMADOR_ID` se obtiene desde el registro DANA y se usa como valor esperado para validar la cédula. El portal informa resultados al backend para que DANAconnect continúe el flujo correspondiente.
 
 ## Integración con Document Manager
 
@@ -281,7 +281,7 @@ VITE_USE_MOCK_API=false
 Para probar este demo ya integrado:
 
 1. Desplegar la Lambda con Function URL.
-2. Configurar en la Lambda `DANA_BASE_URL`, credenciales de Data Retrieval/File Upload y los Project IDs de resultado.
+2. Configurar en la Lambda `DANA_BASE_URL`, `DANA_TRIGGER_URL` y credenciales de Data Retrieval/File Upload.
 3. Configurar permisos IAM para invocar Bedrock Sonnet.
 4. Configurar en Amplify `VITE_API_BASE_URL` con la Function URL.
 5. Abrir desde el external trigger de DANA para que viaje el identificador real de Data Retrieval.
