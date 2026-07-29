@@ -19,7 +19,8 @@ export const getExpediente = async (
 export const registerExpedienteFailure = async (
   tomadorId: string,
   token: string,
-  payload: FinalFailurePayload
+  payload: FinalFailurePayload,
+  signal?: AbortSignal
 ): Promise<void> => {
   if (env.useMockApi) return mockApi.registerFailure(tomadorId, payload);
 
@@ -27,6 +28,7 @@ export const registerExpedienteFailure = async (
   return apiRequest<void>(`/expedientes/${encodeURIComponent(dataId)}/resultado`, {
     method: "POST",
     token,
+    signal,
     body: JSON.stringify(payload)
   });
 };

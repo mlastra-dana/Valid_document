@@ -29,23 +29,26 @@ Para una prueba estable, cada registro de `POC_VALIDOC` debe tener:
 - `EMAIL_TOMADOR`: recomendado para comunicaciones.
 - `ESTADO_VALIDOC`: control del proceso.
 - `ADJUNTADOC1`: fileID final cuando el documento fue aceptado.
-- `INTENTOS_VALIDOC`: intentos usados.
+- `INTENTOS_VALIDOC`: intentos usados en el ultimo correo/proceso. Es auditoria, no bloqueo permanente.
 - `MOTIVOFALLO`: ultimo motivo legible de fallo.
 - `DOCUMENTO_DETECTADO`: documento leido por Bedrock.
 - `NOMBRE_ARCHIVO_DOC`: nombre del archivo cargado.
 - `FECHAULTIMOVALIDOC`: ultima actualizacion del flujo.
+- `UID`: identificador unico de la fila DANA para trazabilidad.
 
 ## Flujo de prueba esperado
 
 1. DANA envia el correo con el enlace del portal.
 2. El enlace entrega el `dataId` al portal.
 3. La Lambda consulta Data Retrieval y obtiene el registro del expediente.
-4. Si `ESTADO_VALIDOC` es `COMPLETED` o `ADJUNTADOC1` tiene valor, el portal muestra expediente completado.
-5. Si el expediente esta pendiente, el usuario carga PDF, JPG, JPEG o PNG, o toma foto desde camara.
-6. Bedrock valida que sea cedula venezolana, legible y que coincida con `TOMADOR_ID`.
-7. Si coincide, la Lambda sube el archivo por File Upload API.
-8. La Lambda actualiza el mismo registro DANA con Trigger.
-9. El portal muestra confirmacion.
+4. La Lambda conserva `UID` como `recordUid` para auditar que el intento corresponde a la fila DANA correcta.
+5. Si `ESTADO_VALIDOC` es `COMPLETED` o `ADJUNTADOC1` tiene valor, el portal muestra expediente completado.
+6. Si el expediente esta pendiente, un nuevo correo inicia un nuevo ciclo de tres intentos.
+7. El usuario carga PDF, JPG, JPEG o PNG, o toma foto desde camara.
+8. Bedrock valida que sea cedula venezolana, legible y que coincida con `TOMADOR_ID`.
+9. Si coincide, la Lambda sube el archivo por File Upload API.
+10. La Lambda actualiza el mismo registro DANA con Trigger.
+11. El portal muestra confirmacion.
 
 ## Criterios de exito
 
@@ -70,6 +73,8 @@ Cuando el documento no pasa, DANA conserva el ultimo resultado conocido:
 - `Servicio de validacion no disponible`
 
 No se guarda historial completo de intentos. Se guarda el ultimo motivo para que soporte, KAM u operaciones puedan entender el caso aunque el usuario abandone.
+
+Si DANA envia un recordatorio o nuevo correo porque el expediente sigue pendiente, ese nuevo enlace debe permitir tres intentos nuevamente. `INTENTOS_VALIDOC` puede conservar el valor anterior como referencia operativa, pero el portal no lo usa como bloqueo global.
 
 ## Alcance fuera del POC
 

@@ -30,13 +30,13 @@ docs/dana/validoc-test-list-template.csv
 
 `FECHAULTIMOVALIDOC`: fecha/hora de la última actualización del proceso.
 
-`INTENTOS_VALIDOC`: cantidad de intentos usados al momento de la última validación fallida. No es un historial; se sobrescribe con el último intento conocido.
+`INTENTOS_VALIDOC`: cantidad de intentos usados al momento de la última validación fallida del correo/proceso más reciente. No es un historial; se sobrescribe con el último intento conocido. No debe usarse como bloqueo permanente si DANA envía un nuevo correo para un expediente pendiente.
 
 `MOTIVOFALLO`: último motivo conocido de fallo. Se actualiza desde el primer intento fallido para cubrir abandono del cliente. Se guarda como texto operativo legible. Ejemplos: `Documento no legible`, `Archivo no es cedula de identidad`, `Documento no coincide con tomador`.
 
 `NOMBRE_ARCHIVO_DOC`: nombre del archivo seleccionado por el usuario. Es texto de auditoría; no sube ni guarda el archivo.
 
-`UID`: identificador interno de la fila en DANA.
+`UID`: identificador interno y único de la fila en DANA. La Lambda lo lee como referencia de trazabilidad (`recordUid`) para confirmar que el intento corresponde al registro correcto. No se sobrescribe durante la actualización.
 
 ## Uso en la Lambda
 

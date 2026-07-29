@@ -33,6 +33,7 @@ export interface EncodedDocument {
 export interface DocumentValidationPayload {
   tomadorId: string;
   dataId?: string;
+  recordUid?: string;
   attemptsUsed?: number;
   maxAttempts?: number;
   document: EncodedDocument;
@@ -47,6 +48,7 @@ export interface DocumentValidationResponse {
 export interface DocumentRegistrationPayload {
   tomadorId: string;
   dataId?: string;
+  recordUid?: string;
   detectedDocumentNumber: string;
   document: EncodedDocument;
 }
@@ -65,6 +67,7 @@ export interface FinalFailurePayload {
   attemptsUsed: number;
   tomadorId?: string;
   dataId?: string;
+  recordUid?: string;
   detectedDocumentNumber?: string | null;
   fileName?: string;
 }

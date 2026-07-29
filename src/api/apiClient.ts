@@ -22,6 +22,14 @@ const statusToErrorCode = (status: number): ApiErrorCode => {
 export const apiRequest = async <T>(path: string, options: RequestOptions): Promise<T> => {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), options.timeoutMs ?? env.requestTimeoutMs);
+  const externalSignal = options.signal;
+  const abortFromExternalSignal = () => controller.abort();
+
+  if (externalSignal?.aborted) {
+    controller.abort();
+  } else {
+    externalSignal?.addEventListener("abort", abortFromExternalSignal, { once: true });
+  }
 
   try {
     const response = await fetch(`${env.apiBaseUrl}${path}`, {
@@ -57,5 +65,6 @@ export const apiRequest = async <T>(path: string, options: RequestOptions): Prom
     throw new ApiError("NETWORK_ERROR", "No fue posible contactar el servicio.");
   } finally {
     window.clearTimeout(timeout);
+    externalSignal?.removeEventListener("abort", abortFromExternalSignal);
   }
 };

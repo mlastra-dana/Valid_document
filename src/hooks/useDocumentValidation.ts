@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { registerIdentityDocument, validateIdentityDocument } from "../api/documentoApi";
 import { registerExpedienteFailure } from "../api/expedienteApi";
 import { fileToBase64 } from "../lib/base64";
@@ -29,6 +29,8 @@ const processingMessages = [
 ];
 
 export const useDocumentValidation = (expediente: Expediente, token: string) => {
+  const runIdRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
   const [status, setStatus] = useState<ValidationFlowStatus>("idle");
   const [attempts, setAttempts] = useState<AttemptStatus>({
     used: expediente.intentosRealizados,
@@ -41,6 +43,12 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
   const [messageIndex, setMessageIndex] = useState(0);
 
   const processing = status === "encoding" || status === "validating" || status === "registering";
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   useEffect(() => {
     if (!processing) {
@@ -67,13 +75,20 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [processing]);
 
-  const resetRecoverableError = useCallback(() => {
+  const cancelCurrentAttempt = useCallback(() => {
+    runIdRef.current += 1;
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setValidationResult(null);
+    setError(null);
     if (status === "validation-error" || status === "service-error") {
       setStatus("idle");
-      setValidationResult(null);
-      setError(null);
+      return;
     }
-  }, [status]);
+    if (processing) {
+      setStatus("idle");
+    }
+  }, [processing, status]);
 
   const submitDocument = useCallback(
     async (selected: SelectedDocumentFile) => {
@@ -82,9 +97,17 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
       setError(null);
       setValidationResult(null);
       setStatus("encoding");
+      const runId = runIdRef.current + 1;
+      runIdRef.current = runId;
+      abortRef.current?.abort();
+      const abortController = new AbortController();
+      abortRef.current = abortController;
+      const isCurrentRun = () => runIdRef.current === runId && !abortController.signal.aborted;
 
       try {
         const contentBase64 = await fileToBase64(selected.file);
+        if (!isCurrentRun()) return;
+
         const document = {
           fileName: selected.file.name,
           contentType: selected.file.type,
@@ -95,10 +118,12 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         const response = await validateIdentityDocument(token, {
           tomadorId: expediente.tomadorId,
           dataId: expediente.dataId,
+          recordUid: expediente.recordUid,
           attemptsUsed: attempts.used,
           maxAttempts: attempts.maximum,
           document
-        });
+        }, abortController.signal);
+        if (!isCurrentRun()) return;
 
         setAttempts(response.attempts);
         setValidationResult(response.validation);
@@ -110,9 +135,11 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
             attemptsUsed: response.attempts.used,
             tomadorId: expediente.tomadorId,
             dataId: expediente.dataId,
+            recordUid: expediente.recordUid,
             detectedDocumentNumber: response.validation.detectedDocumentNumber,
             fileName: selected.file.name
-          });
+          }, abortController.signal);
+          if (!isCurrentRun()) return;
 
           if (response.attempts.remaining <= 0 || response.validation.reasonCode === "MAX_ATTEMPTS_REACHED") {
             setStatus("max-attempts");
@@ -127,13 +154,17 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         const registration = await registerIdentityDocument(token, {
           tomadorId: expediente.tomadorId,
           dataId: expediente.dataId,
+          recordUid: expediente.recordUid,
           detectedDocumentNumber: response.validation.detectedDocumentNumber ?? "",
           document
-        });
+        }, abortController.signal);
+        if (!isCurrentRun()) return;
 
         setRegistrationResult(registration);
         setStatus("completed");
       } catch (caughtError) {
+        if (!isCurrentRun()) return;
+
         if (caughtError instanceof ApiError && caughtError.code === "MAX_ATTEMPTS_REACHED") {
           setStatus("max-attempts");
           setAttempts((current) => ({ ...current, remaining: 0, used: current.maximum }));
@@ -142,6 +173,10 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
 
         setError(caughtError);
         setStatus("service-error");
+      } finally {
+        if (abortRef.current === abortController) {
+          abortRef.current = null;
+        }
       }
     },
     [
@@ -149,6 +184,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
       attempts.remaining,
       attempts.used,
       expediente.dataId,
+      expediente.recordUid,
       expediente.tomadorId,
       processing,
       token
@@ -164,6 +200,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
     processingMessage: processingMessages[messageIndex],
     processing,
     submitDocument,
-    resetRecoverableError
+    resetRecoverableError: cancelCurrentAttempt,
+    cancelCurrentAttempt
   };
 };

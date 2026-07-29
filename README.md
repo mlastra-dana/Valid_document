@@ -12,9 +12,10 @@ El demo se considera estable para presentación con este alcance:
 
 - Consulta de expediente desde DANA Data Retrieval usando el `dataId` del enlace.
 - Obtención de `TOMADOR_ID` desde el registro DANA.
+- Trazabilidad del `UID` único de la fila DANA como `recordUid`.
 - Validación de cédula venezolana por nacionalidad y número exactos contra `TOMADOR_ID`.
 - Carga de PDF, JPG, JPEG o PNG, con normalización backend del tipo real del archivo.
-- Tres intentos máximos por expediente.
+- Tres intentos máximos por enlace/correo.
 - Registro del último fallo conocido en DANA con motivo legible para operaciones.
 - File Upload a DANA solo cuando Bedrock valida correctamente el documento.
 - Actualización del mismo registro DANA mediante Trigger.
@@ -31,14 +32,14 @@ Fuera de alcance para este POC:
 
 1. DANAconnect envía el correo inicial con el enlace de acceso.
 2. El frontend recibe el `dataId` entregado por el external trigger de DANA.
-3. La Lambda consulta Data Retrieval y obtiene `TOMADOR_ID`, nombre, cédula informativa, estado e intentos.
+3. La Lambda consulta Data Retrieval y obtiene `TOMADOR_ID`, `UID`, nombre, cédula informativa y estado.
 4. Si el expediente ya está completado, el portal muestra cierre y no permite carga.
 5. El usuario carga PDF, JPG, JPEG o PNG de máximo 10 MB, o toma una foto desde cámara cuando el dispositivo lo permite.
 6. El frontend envía el archivo en Base64 sin prefijo Data URL.
 7. Bedrock Sonnet valida legibilidad, tipo de documento y documento detectado.
 8. El backend compara nacionalidad más número contra `TOMADOR_ID`.
 9. En éxito, el backend sube el archivo con File Upload API y actualiza DANAconnect.
-10. En fallo, el backend actualiza el último motivo conocido para que DANA pueda continuar con refuerzo o seguimiento.
+10. En fallo, el backend actualiza el último motivo conocido y los intentos usados de ese correo para que DANA pueda continuar con refuerzo o seguimiento.
 
 ## Tecnologías
 
@@ -52,6 +53,7 @@ Fuera de alcance para este POC:
 - AWS Lambda Function URL
 - Amazon Bedrock con modelo Sonnet
 - APIs Data Retrieval y Upload de DANAconnect
+- PWA instalable con manifest y service worker
 
 ## Requisitos
 
@@ -213,7 +215,7 @@ Responsabilidades:
 - Invocar Amazon Bedrock Sonnet para validar legibilidad, tipo de documento y número detectado.
 - Comparar el número detectado contra el esperado del tomador.
 - Usar File Upload API de DANAconnect para subir la cédula validada.
-- Actualizar el mismo registro en DANA con Trigger usando el `dataId` del enlace.
+- Actualizar el mismo registro en DANA con Trigger usando el `dataId` del enlace y registrar el `UID` en logs de trazabilidad.
 
 Variables del backend:
 
@@ -299,6 +301,17 @@ Para producción:
 VITE_API_BASE_URL=https://abcxyz.lambda-url.us-east-1.on.aws
 VITE_USE_MOCK_API=false
 ```
+
+## PWA
+
+La app incluye soporte PWA:
+
+- `public/manifest.webmanifest`
+- `public/sw.js`
+- iconos `192x192`, `512x512` y `apple-touch-icon`
+- meta tags para iOS y desktop
+
+La PWA cachea solo el app shell y assets estáticos. No cachea endpoints de expediente, validación, registro ni documentos. La validación sigue requiriendo conexión y un enlace DANA vigente.
 
 Para probar este demo ya integrado:
 

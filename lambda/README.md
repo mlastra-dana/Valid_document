@@ -30,11 +30,12 @@ Python 3.12
 
 1. El frontend llama la Function URL con `Authorization: Bearer <dataId-del-enlace>`.
 2. La Lambda consulta el expediente en DANAconnect usando Data Retrieval.
-3. La Lambda recibe la cédula en Base64 y valida tipo/tamaño.
-4. La Lambda invoca Bedrock Sonnet para leer el documento usando el `TOMADOR_ID` ya obtenido del expediente.
-5. La Lambda compara la cédula detectada con la esperada por DANA.
-6. Si es válida, sube el documento con el API Upload de DANAconnect.
-7. Si una validación falla, registra el último motivo conocido en DANA para cubrir abandono del cliente.
+3. La Lambda conserva `UID` como `recordUid` de trazabilidad del registro.
+4. La Lambda recibe la cédula en Base64 y valida tipo/tamaño.
+5. La Lambda invoca Bedrock Sonnet para leer el documento usando el `TOMADOR_ID` ya obtenido del expediente.
+6. La Lambda compara la cédula detectada con la esperada por DANA.
+7. Si es válida, sube el documento con el API Upload de DANAconnect.
+8. Si una validación falla, registra el último motivo conocido en DANA para cubrir abandono del cliente.
 
 ## Variables de entorno
 
@@ -75,6 +76,8 @@ Para actualizar el registro existente se usa Trigger con el `dataId`/`dana` reci
 ```text
 POST /event/Trigger?dana={dataId}&CAMPO=valor
 ```
+
+`TOMADOR_ID` no se usa como llave de actualización. Si Data Retrieval entrega `UID`, la Lambda lo transporta como `recordUid` y lo escribe en logs para verificar que el intento y la actualización pertenecen a la misma fila DANA.
 
 La Lambda no guarda un historial de intentos fallidos. Actualiza los campos del último fallo conocido (`MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC`) desde el primer intento fallido. `MOTIVOFALLO` se escribe como texto legible para operaciones, por ejemplo `Documento no coincide con tomador`.
 

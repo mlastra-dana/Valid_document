@@ -514,10 +514,12 @@ def retrieve_tomador(tomador_id, portal_token):
         "IDENTIFICACION",
         "CI",
     )
+    record_uid = get_first_value(data, "UID", "uid", "idrow", "IDROW")
 
     expediente = {
         "tomadorId": expected_tomador_id,
         "dataId": tomador_id,
+        "recordUid": str(record_uid or ""),
         "nombreTomador": get_first_value(
             data,
             "nombreTomador",
@@ -536,22 +538,13 @@ def retrieve_tomador(tomador_id, portal_token):
             "FECHACOMPLETADO",
             "FECHAULTIMOVALIDOC",
         ),
-        "intentosRealizados": int(
-            get_first_value(
-                data,
-                "intentosRealizados",
-                "INTENTOSREALIZADOS",
-                "INTENTOS_VALIDOC",
-                "IntentosValidaDoc",
-                "INTENTOSVALIDADOC",
-            )
-            or 0
-        ),
+        "intentosRealizados": 0,
         "maximoIntentos": int(get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS") or 3),
     }
     log_event(
         "expediente_extracted",
         dataIdPreview=preview_value(tomador_id),
+        recordUid=expediente.get("recordUid"),
         tomadorIdPreview=preview_value(expediente.get("tomadorId")),
         hasNombreTomador=bool(expediente.get("nombreTomador")),
         hasCedulaTomador=bool(expediente.get("cedulaTomador")),
@@ -590,7 +583,7 @@ def build_result_fields(tomador_id, payload):
     }
 
 
-def update_dana_record(data_id, fields):
+def update_dana_record(data_id, fields, record_uid=None):
     if not data_id:
         raise AppError(400, "INVALID_REQUEST", "Falta el identificador DANA del registro.")
     if not use_dana_basic_auth():
@@ -606,6 +599,7 @@ def update_dana_record(data_id, fields):
     log_event(
         "dana_record_update_request",
         dataIdPreview=preview_value(data_id),
+        recordUid=str(record_uid or ""),
         fields=list(fields.keys()),
     )
     request = urllib.request.Request(
@@ -624,6 +618,7 @@ def update_dana_record(data_id, fields):
             log_event(
                 "dana_record_update_response",
                 dataIdPreview=preview_value(data_id),
+                recordUid=str(record_uid or ""),
                 statusCode=result.status,
                 bodyPreview=raw_body[:300],
             )
@@ -633,12 +628,17 @@ def update_dana_record(data_id, fields):
         log_event(
             "dana_record_update_error",
             dataIdPreview=preview_value(data_id),
+            recordUid=str(record_uid or ""),
             statusCode=error.code,
             bodyPreview=error_body[:300],
         )
         raise AppError(error.code, "DANA_SERVICE_ERROR", "DANAconnect no actualizó el registro.")
     except urllib.error.URLError:
-        log_event("dana_record_update_url_error", dataIdPreview=preview_value(data_id))
+        log_event(
+            "dana_record_update_url_error",
+            dataIdPreview=preview_value(data_id),
+            recordUid=str(record_uid or ""),
+        )
         raise AppError(502, "DANA_SERVICE_ERROR", "No fue posible conectar con DANAconnect.")
 
 
@@ -646,6 +646,7 @@ def register_result(data_id, tomador_id, payload):
     update_dana_record(
         data_id,
         build_result_fields(tomador_id, payload),
+        payload.get("recordUid"),
     )
 
 
@@ -707,6 +708,7 @@ def upload_document(payload):
                 "detectedDocumentNumber": payload.get("detectedDocumentNumber"),
             },
         ),
+        payload.get("recordUid"),
     )
 
     return {
@@ -854,6 +856,7 @@ def handle_validate_document(portal_token, payload):
     log_event(
         "validation_context_ready",
         dataIdPreview=preview_value(data_id),
+        recordUid=str(payload.get("recordUid") or ""),
         expectedPreview=preview_value(tomador_id),
         source="payload",
     )

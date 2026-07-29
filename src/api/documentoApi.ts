@@ -10,26 +10,30 @@ import { apiRequest } from "./apiClient";
 
 export const validateIdentityDocument = async (
   token: string,
-  payload: DocumentValidationPayload
+  payload: DocumentValidationPayload,
+  signal?: AbortSignal
 ): Promise<DocumentValidationResponse> => {
   if (env.useMockApi) return mockApi.validateDocument(payload);
 
   return apiRequest<DocumentValidationResponse>("/documentos-identidad/validar", {
     method: "POST",
     token,
+    signal,
     body: JSON.stringify(payload)
   });
 };
 
 export const registerIdentityDocument = async (
   token: string,
-  payload: DocumentRegistrationPayload
+  payload: DocumentRegistrationPayload,
+  signal?: AbortSignal
 ): Promise<DocumentRegistrationResult> => {
   if (env.useMockApi) return mockApi.registerDocument(payload);
 
   return apiRequest<DocumentRegistrationResult>("/documentos-identidad/registrar", {
     method: "POST",
     token,
+    signal,
     body: JSON.stringify(payload)
   });
 };

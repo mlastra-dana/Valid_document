@@ -23,11 +23,13 @@ Authorization: Basic ...
 
 El `dataId` viene del enlace entregado por DANA. `TOMADOR_ID` no viaja en el link; se obtiene desde Data Retrieval y queda como identificador esperado para validar la cédula.
 
+`UID` es la referencia única de la fila DANA. La Lambda lo lee como `recordUid` cuando Data Retrieval lo entrega y lo conserva para trazabilidad del intento. No se usa `TOMADOR_ID` como llave de actualización.
+
 Si el registro ya está completado, el portal no permite cargar otro documento para ese mismo expediente. Se considera completado cuando `ESTADO_VALIDOC` es `COMPLETED` o cuando `ADJUNTADOC1` ya contiene un `fileID`.
 
 ## Validación
 
-El usuario puede intentar cargar el documento hasta tres veces.
+El usuario puede intentar cargar el documento hasta tres veces por enlace/correo.
 
 Cada intento:
 
@@ -38,13 +40,15 @@ Cada intento:
 
 Después de abrir el expediente, la validación usa el `TOMADOR_ID` ya obtenido y no vuelve a consultar Data Retrieval antes de Bedrock. Esto permite que el cliente tenga más margen para corregir y subir el documento dentro de la misma sesión del portal.
 
+Cuando DANA envia un nuevo correo o recordatorio con un nuevo `dataId`, el portal inicia nuevamente el contador visible en 0 intentos usados. `INTENTOS_VALIDOC` queda como auditoria del ultimo resultado conocido, pero no bloquea un nuevo correo pendiente.
+
 ## Fallos
 
 No se guarda un historial de cada intento fallido en DANA.
 
 Si falla un intento, la Lambda actualiza los campos del último resultado conocido: `MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC` y `FECHAULTIMOVALIDOC`. Si el cliente abandona después del primer intento, DANA conserva ese último motivo.
 
-El portal permite continuar mientras queden intentos disponibles. Si falla el tercer intento, el estado queda cerrado como `VALIDATION_FAILED`.
+El portal permite continuar mientras queden intentos disponibles en el enlace actual. Si falla el tercer intento, el estado queda como `VALIDATION_FAILED` para que DANA pueda enviar refuerzo o seguimiento. Un nuevo correo pendiente puede iniciar otro ciclo de tres intentos.
 
 Los motivos se escriben en DANA como textos operativos legibles, por ejemplo:
 
@@ -58,7 +62,7 @@ Si el documento es válido:
 
 1. La Lambda sube el archivo con File Upload API. Esta llamada solo ocurre después de que la validación sea correcta.
 2. DANAconnect retorna `fileID`.
-3. La Lambda actualiza el mismo registro DANA usando el `dataId` del enlace.
+3. La Lambda actualiza el mismo registro DANA usando el `dataId` del enlace y registra `recordUid` en logs para validar trazabilidad con la fila DANA.
 4. El frontend muestra la confirmación final.
 
 Si el cliente vuelve a abrir el mismo enlace después de completado, Data Retrieval retorna el estado actualizado y el portal muestra la pantalla de expediente completado sin habilitar carga.

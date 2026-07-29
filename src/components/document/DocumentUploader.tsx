@@ -44,9 +44,24 @@ export const DocumentUploader = ({
     };
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!cameraActive || !video || !stream) return;
+
+    video.srcObject = stream;
+    const playPromise = video.play();
+    if (playPromise) {
+      playPromise.catch(() => {
+        setError("No pudimos mostrar la cámara. Cierra y vuelve a intentarlo.");
+      });
+    }
+  }, [cameraActive]);
+
   const stopCamera = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false);
   };
 
@@ -67,10 +82,6 @@ export const DocumentUploader = ({
         audio: false
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
       setCameraActive(true);
     } catch {
       setError("No pudimos abrir la cámara. Verifica los permisos del navegador o carga el archivo manualmente.");
@@ -290,7 +301,7 @@ export const DocumentUploader = ({
 
       {selected ? (
         <div className="space-y-4">
-          <DocumentPreview selected={selected} disabled={processing} onRemove={clearSelection} />
+          <DocumentPreview selected={selected} disabled={disabled} onRemove={clearSelection} />
         </div>
       ) : null}
     </div>

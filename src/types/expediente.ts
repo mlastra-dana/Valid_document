@@ -1,6 +1,7 @@
 export interface Expediente {
   tomadorId: string;
   dataId?: string;
+  recordUid?: string;
   nombreTomador?: string;
   tipoPersona?: "natural" | "juridica";
   numeroDocumentoEsperado?: string;
