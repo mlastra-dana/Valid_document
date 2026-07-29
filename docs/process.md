@@ -50,5 +50,5 @@ Si el documento es válido:
 
 1. La Lambda sube el archivo con File Upload API. Esta llamada solo ocurre después de que la validación sea correcta.
 2. DANAconnect retorna `fileID`.
-3. La Lambda dispara el flujo de éxito por Start Conversation.
+3. La Lambda actualiza el mismo registro DANA usando el `dataId` del enlace.
 4. El frontend muestra la confirmación final.

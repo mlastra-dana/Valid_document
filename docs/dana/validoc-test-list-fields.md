@@ -40,11 +40,11 @@ docs/dana/validoc-test-list-template.csv
 
 ## Uso en la Lambda
 
-Estos campos forman parte del contrato del proceso Validoc. `DANA_DATA_FIELDS` controla los campos que Data Retrieval lee desde `POC_VALIDOC`; los campos que la Lambda escribe en Start Conversation se mantienen mapeados en código porque tienen lógica asociada.
+Estos campos forman parte del contrato del proceso Validoc. `DANA_DATA_FIELDS` controla los campos que Data Retrieval lee desde `POC_VALIDOC`; los campos que la Lambda actualiza con Trigger se mantienen mapeados en código porque tienen lógica asociada.
 
 Data Retrieval solicita la lista completa para que el portal pueda mostrar el expediente y comparar contra `TOMADOR_ID`.
 
-Start Conversation de éxito envía:
+La actualización de éxito sobre el mismo registro envía:
 
 ```json
 {
@@ -59,7 +59,7 @@ Start Conversation de éxito envía:
 }
 ```
 
-Start Conversation de fallo envía el último resultado conocido:
+La actualización de fallo sobre el mismo registro envía el último resultado conocido:
 
 ```json
 {

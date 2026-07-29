@@ -30,6 +30,7 @@ SECURITY_HEADERS = {
 }
 
 DANA_BASE_URL = os.environ.get("DANA_BASE_URL", "https://appserv.danaconnect.com").rstrip("/")
+DANA_TRIGGER_URL = os.environ.get("DANA_TRIGGER_URL", "https://appserv.danaconnect.com/event/Trigger")
 DANA_TOKEN_URL = os.environ.get("DANA_TOKEN_URL", "https://auth.danaconnect.com/oauth2/token")
 DANA_ACCESS_TOKEN = os.environ.get("DANA_ACCESS_TOKEN", "")
 DANA_CLIENT_ID = os.environ.get("DANA_CLIENT_ID", "")
@@ -48,8 +49,6 @@ DANA_DATA_FIELDS = os.environ.get(
 DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
 DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "basic").lower()
 VALIDOC_FILE_UPLOAD_PATH = "/dana/conversation/http/rest/file/upload"
-DANA_SUCCESS_PROJECT_ID = os.environ.get("DANA_SUCCESS_PROJECT_ID", "")
-DANA_FAILURE_PROJECT_ID = os.environ.get("DANA_FAILURE_PROJECT_ID", "")
 DANA_CONVERSATION_DEBUG = os.environ.get("DANA_CONVERSATION_DEBUG", "0")
 DANA_TIMEOUT_SECONDS = int(os.environ.get("DANA_TIMEOUT_SECONDS", "20"))
 
@@ -409,11 +408,6 @@ def build_upload_url():
     return f"{DANA_BASE_URL}{VALIDOC_FILE_UPLOAD_PATH}"
 
 
-def build_start_project_conversation_url(project_id):
-    encoded_project_id = urllib.parse.quote(str(project_id), safe="")
-    return f"{DANA_BASE_URL}/api/2.0/rest/conversation/ProjectID/{encoded_project_id}/start/data"
-
-
 def get_first_value(data, *keys):
     for key in keys:
         value = extract_field(data, key)
@@ -519,22 +513,6 @@ def retrieve_tomador(tomador_id, portal_token):
     return expediente
 
 
-def start_project_conversation(project_id, fields, portal_token):
-    if not project_id:
-        return
-
-    request = urllib.request.Request(
-        build_start_project_conversation_url(project_id),
-        data=json.dumps(fields).encode("utf-8"),
-        method="POST",
-        headers={
-            **dana_headers(portal_token),
-            "X-DEBUG": DANA_CONVERSATION_DEBUG,
-        },
-    )
-    send_request(request)
-
-
 def build_result_fields(tomador_id, payload):
     return {
         FIELD_TOMADOR_ID: tomador_id,
@@ -548,11 +526,62 @@ def build_result_fields(tomador_id, payload):
     }
 
 
-def register_result(tomador_id, payload, portal_token):
-    start_project_conversation(
-        DANA_FAILURE_PROJECT_ID,
+def update_dana_record(data_id, fields):
+    if not data_id:
+        raise AppError(400, "INVALID_REQUEST", "Falta el identificador DANA del registro.")
+    if not use_dana_basic_auth():
+        raise AppError(
+            500,
+            "SERVER_ERROR",
+            "DANA_USERNAME y DANA_PASSWORD son requeridos para actualizar el registro.",
+        )
+
+    query = {"dana": str(data_id)}
+    query.update({key: "" if value is None else str(value) for key, value in fields.items()})
+    url = f"{DANA_TRIGGER_URL}?{urllib.parse.urlencode(query)}"
+    log_event(
+        "dana_record_update_request",
+        dataIdPreview=preview_value(data_id),
+        fields=list(fields.keys()),
+    )
+    request = urllib.request.Request(
+        url,
+        data=b"",
+        method="POST",
+        headers={
+            **dana_basic_headers(),
+            "Content-Length": "0",
+            "X-DEBUG": DANA_CONVERSATION_DEBUG,
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=DANA_TIMEOUT_SECONDS) as result:
+            raw_body = result.read().decode("utf-8", errors="replace")
+            log_event(
+                "dana_record_update_response",
+                dataIdPreview=preview_value(data_id),
+                statusCode=result.status,
+                bodyPreview=raw_body[:300],
+            )
+            return {"statusCode": result.status, "body": raw_body}
+    except urllib.error.HTTPError as error:
+        error_body = error.read().decode("utf-8", errors="replace")
+        log_event(
+            "dana_record_update_error",
+            dataIdPreview=preview_value(data_id),
+            statusCode=error.code,
+            bodyPreview=error_body[:300],
+        )
+        raise AppError(error.code, "DANA_SERVICE_ERROR", "DANAconnect no actualizó el registro.")
+    except urllib.error.URLError:
+        log_event("dana_record_update_url_error", dataIdPreview=preview_value(data_id))
+        raise AppError(502, "DANA_SERVICE_ERROR", "No fue posible conectar con DANAconnect.")
+
+
+def register_result(data_id, tomador_id, payload):
+    update_dana_record(
+        data_id,
         build_result_fields(tomador_id, payload),
-        portal_token,
     )
 
 
@@ -595,14 +624,14 @@ def upload_file_to_dana(document):
     return send_request(request)
 
 
-def upload_document(payload, portal_token):
+def upload_document(payload):
     upload_result = upload_file_to_dana(payload["document"])
     file_id = upload_result.get("fileID")
     if not file_id:
         raise AppError(502, "DANA_UPLOAD_ERROR", "DANAconnect no retornó fileID.")
 
-    start_project_conversation(
-        DANA_SUCCESS_PROJECT_ID,
+    update_dana_record(
+        payload.get("dataId") or payload["tomadorId"],
         build_result_fields(
             payload["tomadorId"],
             {
@@ -613,7 +642,6 @@ def upload_document(payload, portal_token):
                 "detectedDocumentNumber": payload.get("detectedDocumentNumber"),
             },
         ),
-        portal_token,
     )
 
     return {
@@ -661,8 +689,7 @@ def build_bedrock_content(document, expected_document_number):
     }
 
     if document["contentType"] == "application/pdf":
-        safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", document.get("fileName") or "cedula.pdf")
-        media_block = {"type": "document", "source": source, "name": safe_name[:120]}
+        media_block = {"type": "document", "source": source}
     else:
         media_block = {"type": "image", "source": source}
 
@@ -692,6 +719,12 @@ def validate_with_bedrock(document, expected_document_number):
         ],
     }
 
+    log_event(
+        "bedrock_validation_request",
+        contentType=document.get("contentType"),
+        expectedPreview=preview_value(expected_document_number),
+        modelId=BEDROCK_MODEL_ID,
+    )
     result = bedrock_client().invoke_model(
         modelId=BEDROCK_MODEL_ID,
         contentType="application/json",
@@ -714,6 +747,11 @@ def validate_with_bedrock(document, expected_document_number):
     else:
         reason_code = "VALID_DOCUMENT"
 
+    log_event(
+        "bedrock_validation_result",
+        reasonCode=reason_code,
+        detectedPreview=preview_value(detected),
+    )
     return validation_result(reason_code, detected or None)
 
 
@@ -738,21 +776,21 @@ def handle_validate_document(portal_token, payload):
     if attempts_before["remaining"] <= 0:
         return validation_response("MAX_ATTEMPTS_REACHED", attempts=attempts_before, status_code=429)
 
-    attempts = get_attempts(data_id, expediente, increment=True)
     try:
         validation = validate_with_bedrock(payload["document"], expediente.get("numeroDocumentoEsperado"))
     except Exception as error:
-        print(
-            json.dumps(
-                {
-                    "event": "bedrock_validation_failed",
-                    "errorType": type(error).__name__,
-                    "message": str(error),
-                }
-            )
+        log_event(
+            "bedrock_validation_failed",
+            errorType=type(error).__name__,
+            message=str(error)[:500],
         )
-        validation = validation_result("VALIDATION_SERVICE_ERROR")
+        raise AppError(
+            502,
+            "VALIDATION_SERVICE_ERROR",
+            "No pudimos completar la validación en este momento.",
+        )
 
+    attempts = get_attempts(data_id, expediente, increment=True)
     return response(200, {"success": True, "validation": validation, "attempts": attempts})
 
 
@@ -760,8 +798,8 @@ def handle_register_document(portal_token, payload):
     invalid_response = validate_document_payload(payload)
     if invalid_response:
         raise AppError(invalid_response["statusCode"], "VALIDATION_FAILED", "El documento no es válido.")
-    result = upload_document(payload, portal_token)
-    _ATTEMPTS_CACHE.pop(payload["tomadorId"], None)
+    result = upload_document(payload)
+    _ATTEMPTS_CACHE.pop(payload.get("dataId") or payload["tomadorId"], None)
     return response(200, result)
 
 
@@ -770,8 +808,9 @@ def handle_register_failure(path, portal_token, payload):
     if not match:
         return None
     tomador_id = urllib.parse.unquote(match.group(1))
-    register_result(tomador_id, payload, portal_token)
-    _ATTEMPTS_CACHE.pop(tomador_id, None)
+    data_id = payload.get("dataId") or tomador_id
+    register_result(data_id, payload.get("tomadorId") or tomador_id, payload)
+    _ATTEMPTS_CACHE.pop(data_id, None)
     return empty_response(204)
 
 

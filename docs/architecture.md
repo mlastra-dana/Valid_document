@@ -7,24 +7,24 @@
 - DANAconnect Data Retrieval API para consultar el registro del tomador.
 - Amazon Bedrock Sonnet para validar la cédula.
 - DANAconnect File Upload API para subir el documento aprobado.
-- DANAconnect Start Conversation API para continuar el flujo de éxito o refuerzo.
+- DANAconnect Trigger para actualizar el mismo registro de `POC_VALIDOC`.
 
 ## Flujo
 
 ```text
 DANAconnect email
--> enlace con tomadorId/token
+-> enlace con dataId/dana
 -> frontend Amplify
 -> Lambda Function URL
 -> Data Retrieval
 -> Bedrock Sonnet
 -> File Upload
--> Start Conversation
+-> Trigger update sobre el mismo registro
 ```
 
 ## Contrato DANA
 
-Los campos de la lista Validoc son contrato fijo del proceso y viven en el código de la Lambda. No son variables de entorno.
+Los campos de lectura de la lista Validoc se configuran con `DANA_DATA_FIELDS`. Los campos que se escriben quedan mapeados en código porque tienen lógica de negocio.
 
 La lista de prueba está en:
 
@@ -44,7 +44,7 @@ Las variables de entorno se limitan a:
 
 - Credenciales DANAconnect.
 - Base URL y token URL.
-- Project IDs de resultado.
+- Trigger URL para actualizar el mismo registro.
 - Configuración de Bedrock.
 - CORS, timeout y tamaño máximo.
 

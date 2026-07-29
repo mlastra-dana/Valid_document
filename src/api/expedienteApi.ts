@@ -23,7 +23,8 @@ export const registerExpedienteFailure = async (
 ): Promise<void> => {
   if (env.useMockApi) return mockApi.registerFailure(tomadorId, payload);
 
-  return apiRequest<void>(`/expedientes/${encodeURIComponent(tomadorId)}/resultado`, {
+  const dataId = payload.dataId || tomadorId;
+  return apiRequest<void>(`/expedientes/${encodeURIComponent(dataId)}/resultado`, {
     method: "POST",
     token,
     body: JSON.stringify(payload)

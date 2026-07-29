@@ -41,6 +41,7 @@ Python 3.12
 ```env
 CORS_ORIGIN=https://tu-dominio-amplify.com
 DANA_BASE_URL=https://appserv.danaconnect.com
+DANA_TRIGGER_URL=https://appserv.danaconnect.com/event/Trigger
 DANA_TOKEN_URL=https://auth.danaconnect.com/oauth2/token
 DANA_ACCESS_TOKEN=
 DANA_CLIENT_ID=
@@ -51,8 +52,6 @@ DANA_OAUTH_SCOPE=
 DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
-DANA_SUCCESS_PROJECT_ID=
-DANA_FAILURE_PROJECT_ID=
 DANA_CONVERSATION_DEBUG=0
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1
@@ -69,15 +68,13 @@ Para Data Retrieval hay dos caminos:
 
 Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
 
-Para File Upload se usa `POST /dana/conversation/http/rest/file/upload` con `multipart/form-data`, campo `file` y Basic Auth (`DANA_USERNAME`/`DANA_PASSWORD`). La respuesta esperada incluye `fileID`, que luego se envía como campo al Start Conversation de éxito.
+Para File Upload se usa `POST /dana/conversation/http/rest/file/upload` con `multipart/form-data`, campo `file` y Basic Auth (`DANA_USERNAME`/`DANA_PASSWORD`). La respuesta esperada incluye `fileID`, que luego se escribe en `ADJUNTADOC1`.
 
-Para Start Conversation se usa OAuth Bearer. El camino recomendado es por Project ID:
+Para actualizar el registro existente se usa Trigger con el `dataId`/`dana` recibido desde el enlace:
 
 ```text
-POST /api/2.0/rest/conversation/ProjectID/{projectId}/start/data
+POST /event/Trigger?dana={dataId}&CAMPO=valor
 ```
-
-Configura `DANA_SUCCESS_PROJECT_ID` para el resultado exitoso y `DANA_FAILURE_PROJECT_ID` para el flujo de fallo/refuerzo. El disparo se hace por `ProjectID` para mantener el mismo criterio entre ambientes.
 
 La Lambda no guarda un historial de intentos fallidos. Actualiza los campos del último fallo conocido (`MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC`) desde el primer intento fallido.
 

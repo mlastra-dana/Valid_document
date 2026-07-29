@@ -55,9 +55,11 @@ export const DocumentUploader = ({
 
     if (selected?.previewUrl) URL.revokeObjectURL(selected.previewUrl);
     const previewUrl = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined;
-    setSelected({ file, previewUrl });
+    const nextSelected = { file, previewUrl };
+    setSelected(nextSelected);
     setError(null);
     onFileChange?.();
+    onSubmit(nextSelected);
   };
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -133,16 +135,6 @@ export const DocumentUploader = ({
       {selected ? (
         <div className="space-y-4">
           <DocumentPreview selected={selected} disabled={processing} onRemove={clearSelection} />
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => onSubmit(selected)}
-              disabled={processing || disabled}
-              className="w-full rounded-md bg-mercantil-blue px-6 py-3 font-bold text-white shadow-sm hover:bg-mercantil-navy disabled:opacity-60 sm:w-auto"
-            >
-              Validar documento
-            </button>
-          </div>
         </div>
       ) : null}
     </div>

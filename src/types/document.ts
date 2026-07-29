@@ -44,6 +44,7 @@ export interface DocumentValidationResponse {
 
 export interface DocumentRegistrationPayload {
   tomadorId: string;
+  dataId?: string;
   detectedDocumentNumber: string;
   document: EncodedDocument;
 }
@@ -60,6 +61,8 @@ export interface FinalFailurePayload {
   status: "VALIDATION_FAILED";
   reasonCode: ValidationReasonCode;
   attemptsUsed: number;
+  tomadorId?: string;
+  dataId?: string;
   detectedDocumentNumber?: string | null;
   fileName?: string;
 }

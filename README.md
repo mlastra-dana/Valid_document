@@ -192,13 +192,14 @@ Responsabilidades:
 - Invocar Amazon Bedrock Sonnet para validar legibilidad, tipo de documento y número detectado.
 - Comparar el número detectado contra el esperado del tomador.
 - Usar File Upload API de DANAconnect para subir la cédula validada.
-- Disparar Start Conversation v2 al éxito y actualizar en DANA el último fallo conocido cuando una validación no pasa.
+- Actualizar el mismo registro en DANA con Trigger usando el `dataId` del enlace.
 
 Variables del backend:
 
 ```env
 CORS_ORIGIN=https://tu-dominio-amplify.com
 DANA_BASE_URL=https://appserv.danaconnect.com
+DANA_TRIGGER_URL=https://appserv.danaconnect.com/event/Trigger
 DANA_TOKEN_URL=https://auth.danaconnect.com/oauth2/token
 DANA_ACCESS_TOKEN=
 DANA_CLIENT_ID=
@@ -209,8 +210,6 @@ DANA_OAUTH_SCOPE=
 DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
-DANA_SUCCESS_PROJECT_ID=
-DANA_FAILURE_PROJECT_ID=
 DANA_CONVERSATION_DEBUG=0
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1

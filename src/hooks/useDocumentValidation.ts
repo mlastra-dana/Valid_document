@@ -106,6 +106,8 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
             status: "VALIDATION_FAILED",
             reasonCode: response.validation.reasonCode,
             attemptsUsed: response.attempts.used,
+            tomadorId: expediente.tomadorId,
+            dataId: expediente.dataId,
             detectedDocumentNumber: response.validation.detectedDocumentNumber,
             fileName: selected.file.name
           });
@@ -122,6 +124,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         setStatus("registering");
         const registration = await registerIdentityDocument(token, {
           tomadorId: expediente.tomadorId,
+          dataId: expediente.dataId,
           detectedDocumentNumber: response.validation.detectedDocumentNumber ?? "",
           document
         });
