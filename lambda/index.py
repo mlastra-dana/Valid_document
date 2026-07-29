@@ -223,6 +223,11 @@ def dana_error_message(data):
     return ""
 
 
+def is_expired_dana_token_error(message):
+    normalized = str(message or "").strip().lower()
+    return "token" in normalized and "expired" in normalized
+
+
 def detect_media_type(document):
     content_base64 = re.sub(r"\s+", "", document.get("contentBase64") or "")
     try:
@@ -470,6 +475,12 @@ def retrieve_tomador(tomador_id, portal_token):
             dataIdPreview=preview_value(tomador_id),
             message=dana_error[:300],
         )
+        if is_expired_dana_token_error(dana_error):
+            raise AppError(
+                401,
+                "EXPIRED_LINK",
+                "El enlace ha expirado.",
+            )
         raise AppError(
             404,
             "EXPEDIENTE_NOT_FOUND",
@@ -542,10 +553,27 @@ def retrieve_tomador(tomador_id, portal_token):
     return expediente
 
 
+def dana_reason_label(reason_code):
+    labels = {
+        "VALID_DOCUMENT": "",
+        "UNREADABLE_DOCUMENT": "Documento no legible",
+        "NOT_IDENTITY_DOCUMENT": "Archivo no es cedula de identidad",
+        "TOMADOR_MISMATCH": "Documento no coincide con tomador",
+        "UNSUPPORTED_FILE": "Formato de archivo no permitido",
+        "FILE_TOO_LARGE": "Archivo supera el tamano permitido",
+        "MAX_ATTEMPTS_REACHED": "Maximo de intentos alcanzado",
+        "VALIDATION_SERVICE_ERROR": "Servicio de validacion no disponible",
+        "EXPIRED_LINK": "Enlace expirado",
+        "EXPEDIENTE_NOT_FOUND": "Expediente no encontrado",
+    }
+    return labels.get(str(reason_code or ""), str(reason_code or ""))
+
+
 def build_result_fields(tomador_id, payload):
+    reason_code = payload.get("reasonCode", "")
     return {
         FIELD_TOMADOR_ID: tomador_id,
-        FIELD_REASON_CODE: payload.get("reasonCode", ""),
+        FIELD_REASON_CODE: payload.get("reasonLabel") or dana_reason_label(reason_code),
         FIELD_FILE_ID: payload.get("fileID", ""),
         FIELD_UPDATED_AT: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         FIELD_STATUS: payload.get("status", ""),
@@ -691,6 +719,14 @@ def get_attempts(tomador_id, expediente, increment=False):
     return {"used": used, "remaining": max(maximum - used, 0), "maximum": maximum}
 
 
+def get_attempts_from_payload(data_id, payload, increment=False):
+    expediente = {
+        "intentosRealizados": int(payload.get("attemptsUsed") or 0),
+        "maximoIntentos": int(payload.get("maxAttempts") or 3),
+    }
+    return get_attempts(data_id, expediente, increment)
+
+
 def bedrock_client():
     if boto3 is None:
         raise AppError(500, "SERVER_ERROR", "boto3 no está disponible en el runtime.")
@@ -797,19 +833,25 @@ def handle_get_expediente(path, portal_token):
 
 
 def handle_validate_document(portal_token, payload):
+    del portal_token
     invalid_response = validate_document_payload(payload)
     if invalid_response:
         return invalid_response
 
     tomador_id = payload["tomadorId"]
     data_id = payload.get("dataId") or tomador_id
-    expediente = retrieve_tomador(data_id, portal_token)
-    attempts_before = get_attempts(data_id, expediente)
+    attempts_before = get_attempts_from_payload(data_id, payload)
     if attempts_before["remaining"] <= 0:
         return validation_response("MAX_ATTEMPTS_REACHED", attempts=attempts_before, status_code=429)
 
+    log_event(
+        "validation_context_ready",
+        dataIdPreview=preview_value(data_id),
+        expectedPreview=preview_value(tomador_id),
+        source="payload",
+    )
     try:
-        validation = validate_with_bedrock(payload["document"], expediente.get("numeroDocumentoEsperado"))
+        validation = validate_with_bedrock(payload["document"], tomador_id)
     except Exception as error:
         log_event(
             "bedrock_validation_failed",
@@ -822,7 +864,7 @@ def handle_validate_document(portal_token, payload):
             "No pudimos completar la validación en este momento.",
         )
 
-    attempts = get_attempts(data_id, expediente, increment=True)
+    attempts = get_attempts_from_payload(data_id, payload, increment=True)
     return response(200, {"success": True, "validation": validation, "attempts": attempts})
 
 

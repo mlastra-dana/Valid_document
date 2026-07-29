@@ -33,6 +33,8 @@ export interface EncodedDocument {
 export interface DocumentValidationPayload {
   tomadorId: string;
   dataId?: string;
+  attemptsUsed?: number;
+  maxAttempts?: number;
   document: EncodedDocument;
 }
 

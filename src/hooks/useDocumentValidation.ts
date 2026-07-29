@@ -95,6 +95,8 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         const response = await validateIdentityDocument(token, {
           tomadorId: expediente.tomadorId,
           dataId: expediente.dataId,
+          attemptsUsed: attempts.used,
+          maxAttempts: attempts.maximum,
           document
         });
 
@@ -142,7 +144,15 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         setStatus("service-error");
       }
     },
-    [attempts.remaining, expediente.dataId, expediente.tomadorId, processing, token]
+    [
+      attempts.maximum,
+      attempts.remaining,
+      attempts.used,
+      expediente.dataId,
+      expediente.tomadorId,
+      processing,
+      token
+    ]
   );
 
   return {
