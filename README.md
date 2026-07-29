@@ -251,6 +251,7 @@ Documentación adicional:
 - [Ficha del Demo POC](/Users/marialastra/Documents/Valid_document/docs/demo-poc.md)
 - [Arquitectura](/Users/marialastra/Documents/Valid_document/docs/architecture.md)
 - [Proceso Validoc](/Users/marialastra/Documents/Valid_document/docs/process.md)
+- [Opciones de duplicidad por TOMADOR_ID](/Users/marialastra/Documents/Valid_document/docs/duplicate-tomador-options.md)
 - [Lista DANA de pruebas](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-test-list-fields.md)
 - [Lista DANA de auditoría de tokens](/Users/marialastra/Documents/Valid_document/docs/dana/token-audit-list-fields.md)
 - [Email Validoc](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-email-flow.md)

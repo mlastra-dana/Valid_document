@@ -42,6 +42,8 @@ Regla esperada:
 
 Caso importante: si se crea un `UID` nuevo con el mismo `TOMADOR_ID` y ese registro viene limpio, sin `ESTADO_VALIDOC`, sin `ADJUNTADOC1` y sin `TOMADOR_ID_COMPLETADO`, la Lambda no puede saber con Data Retrieval que otro `UID` ya fue completado. En ese escenario el portal lo trataría como pendiente. Por eso el control por `TOMADOR_ID` debe ocurrir en DANA antes de enviar el enlace, o debe existir un API adicional que permita buscar completados por `TOMADOR_ID`.
 
+Las alternativas técnicas para resolver esta duplicidad están documentadas en `docs/duplicate-tomador-options.md`.
+
 ## Validación
 
 El usuario puede intentar cargar el documento hasta tres veces por enlace/correo.

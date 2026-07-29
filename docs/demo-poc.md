@@ -23,6 +23,8 @@ Puede existir mas de un registro/correo con el mismo `TOMADOR_ID`. La regla del 
 
 Si se crea un registro nuevo limpio con el mismo `TOMADOR_ID`, la Lambda solo ve ese nuevo `UID` cuando consulta Data Retrieval. Si DANA no marca `TOMADOR_ID_COMPLETADO`, el portal no tiene forma de saber que existe otro registro completado y permitira la carga. Por eso, para la demo estable, DANA debe consultar o segmentar previamente por `TOMADOR_ID` antes de enviar el correo.
 
+Para presentar opciones de respaldo tecnico, ver `docs/duplicate-tomador-options.md`.
+
 ## Datos minimos en DANA
 
 Para una prueba estable, cada registro de `POC_VALIDOC` debe tener:

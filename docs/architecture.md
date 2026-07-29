@@ -46,6 +46,12 @@ La explicación de campos está en:
 docs/dana/validoc-test-list-fields.md
 ```
 
+Las opciones para controlar duplicidad global por `TOMADOR_ID` están en:
+
+```text
+docs/duplicate-tomador-options.md
+```
+
 ## Configuración
 
 Las variables de entorno se limitan a:
