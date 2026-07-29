@@ -26,17 +26,17 @@ export const getFileExtension = (fileName: string): string => {
 export const validateDocumentFile = (file: File): FileValidationResult => {
   const extension = getFileExtension(file.name);
 
-  if (!allowedMimeTypes.includes(file.type as (typeof allowedMimeTypes)[number])) {
-    return {
-      valid: false,
-      message: "El formato seleccionado no está permitido. Utiliza PDF, JPG, JPEG o PNG."
-    };
-  }
-
   if (!allowedExtensions.includes(extension)) {
     return {
       valid: false,
       message: "La extensión del archivo no está permitida. Utiliza PDF, JPG, JPEG o PNG."
+    };
+  }
+
+  if (file.type && !allowedMimeTypes.includes(file.type as (typeof allowedMimeTypes)[number])) {
+    return {
+      valid: false,
+      message: "El formato seleccionado no está permitido. Utiliza PDF, JPG, JPEG o PNG."
     };
   }
 

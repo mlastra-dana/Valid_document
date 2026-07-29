@@ -223,6 +223,26 @@ def dana_error_message(data):
     return ""
 
 
+def detect_media_type(document):
+    content_base64 = re.sub(r"\s+", "", document.get("contentBase64") or "")
+    try:
+        header = base64.b64decode(content_base64[:64], validate=False)
+    except (ValueError, TypeError):
+        return document.get("contentType") or ""
+
+    if header.startswith(b"%PDF"):
+        return "application/pdf"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    return document.get("contentType") or ""
+
+
+def get_effective_content_type(document):
+    return (detect_media_type(document) or document.get("contentType") or "").lower()
+
+
 def get_extension(file_name):
     guessed = mimetypes.guess_type(file_name or "")[0]
     _, extension = os.path.splitext(file_name or "")
@@ -238,11 +258,20 @@ def validate_document_payload(payload):
     document = payload.get("document") or {}
     if not payload.get("tomadorId") or not document.get("fileName"):
         raise AppError(400, "INVALID_REQUEST", "La solicitud no contiene los datos requeridos.")
-    if not document.get("contentType") or not document.get("contentBase64"):
+    if not document.get("contentBase64"):
         raise AppError(400, "INVALID_REQUEST", "La solicitud no contiene el documento requerido.")
 
     extension, _ = get_extension(document["fileName"])
-    if document["contentType"] not in ALLOWED_CONTENT_TYPES or extension not in ALLOWED_EXTENSIONS:
+    effective_content_type = get_effective_content_type(document)
+    if document.get("contentType") != effective_content_type:
+        log_event(
+            "document_media_type_normalized",
+            declaredContentType=document.get("contentType"),
+            effectiveContentType=effective_content_type,
+            extension=extension,
+        )
+
+    if effective_content_type not in ALLOWED_CONTENT_TYPES or extension not in ALLOWED_EXTENSIONS:
         return validation_response(
             "UNSUPPORTED_FILE",
             attempts={"used": 0, "remaining": 3, "maximum": 3},
@@ -605,10 +634,11 @@ def upload_file_to_dana(document):
         )
 
     file_bytes = base64.b64decode(document["contentBase64"])
+    content_type = get_effective_content_type(document)
     boundary, multipart_body = build_multipart_body(
         "file",
         document["fileName"],
-        document["contentType"],
+        content_type,
         file_bytes,
     )
     request = urllib.request.Request(
@@ -668,6 +698,7 @@ def bedrock_client():
 
 
 def build_bedrock_content(document, expected_document_number):
+    media_type = get_effective_content_type(document)
     prompt = "\n".join(
         [
             "Analiza el archivo adjunto como documento de identidad.",
@@ -684,11 +715,11 @@ def build_bedrock_content(document, expected_document_number):
 
     source = {
         "type": "base64",
-        "media_type": document["contentType"],
+        "media_type": media_type,
         "data": document["contentBase64"],
     }
 
-    if document["contentType"] == "application/pdf":
+    if media_type == "application/pdf":
         media_block = {"type": "document", "source": source}
     else:
         media_block = {"type": "image", "source": source}
@@ -721,7 +752,8 @@ def validate_with_bedrock(document, expected_document_number):
 
     log_event(
         "bedrock_validation_request",
-        contentType=document.get("contentType"),
+        declaredContentType=document.get("contentType"),
+        detectedMediaType=detect_media_type(document),
         expectedPreview=preview_value(expected_document_number),
         modelId=BEDROCK_MODEL_ID,
     )
