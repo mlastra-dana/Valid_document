@@ -75,6 +75,12 @@ _TOKEN_CACHE = {"access_token": "", "expires_at": 0}
 _ATTEMPTS_CACHE = {}
 
 
+def log_event(event_name, **fields):
+    safe_fields = {"event": event_name}
+    safe_fields.update(fields)
+    print(json.dumps(safe_fields, ensure_ascii=False))
+
+
 class AppError(Exception):
     def __init__(self, status_code, code, message):
         super().__init__(message)
@@ -121,6 +127,10 @@ def get_method_and_path(event):
     return method.upper(), path.rstrip("/") or "/"
 
 
+def get_query_params(event):
+    return event.get("queryStringParameters") or {}
+
+
 def get_bearer_token(event):
     headers = event.get("headers") or {}
     authorization = headers.get("authorization") or headers.get("Authorization") or ""
@@ -139,6 +149,28 @@ def mask_document_number(value):
     if not normalized:
         return ""
     return f"{normalized[:1]}{'*' * max(len(normalized) - 3, 3)}{normalized[-2:]}"
+
+
+def preview_value(value):
+    text = str(value or "")
+    if not text:
+        return ""
+    if len(text) <= 10:
+        return mask_document_number(text)
+    return f"{text[:4]}...{text[-4:]}"
+
+
+def summarize_data_shape(value):
+    if isinstance(value, dict):
+        return {"type": "dict", "keys": list(value.keys())[:20]}
+    if isinstance(value, list):
+        first = value[0] if value else None
+        return {
+            "type": "list",
+            "length": len(value),
+            "first": summarize_data_shape(first),
+        }
+    return {"type": type(value).__name__}
 
 
 def get_extension(file_name):
@@ -257,6 +289,13 @@ def send_request(request):
             raw = result.read().decode("utf-8")
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as error:
+        error_body = error.read().decode("utf-8", errors="replace")[:500]
+        log_event(
+            "http_error",
+            url=urllib.parse.urlsplit(request.full_url).path,
+            statusCode=error.code,
+            bodyPreview=error_body,
+        )
         if error.code in (401, 403):
             raise AppError(401, "EXPIRED_LINK", "El enlace ha expirado.")
         if error.code == 404:
@@ -265,6 +304,7 @@ def send_request(request):
             raise AppError(409, "EXPEDIENTE_COMPLETED", "El expediente ya fue completado.")
         raise AppError(error.code, "DANA_SERVICE_ERROR", "DANAconnect no completó la solicitud.")
     except urllib.error.URLError:
+        log_event("url_error", url=urllib.parse.urlsplit(request.full_url).path)
         raise AppError(502, "DANA_SERVICE_ERROR", "No fue posible conectar con DANAconnect.")
 
 
@@ -344,10 +384,18 @@ def parse_bool(value):
 def retrieve_tomador(tomador_id, portal_token):
     data_url = build_data_retrieval_url(tomador_id)
     headers = dana_basic_headers() if use_dana_basic_auth() else dana_headers(portal_token)
+    log_event(
+        "data_retrieval_request",
+        dataIdPreview=preview_value(tomador_id),
+        authMode="basic" if use_dana_basic_auth() else "bearer",
+        fieldsCount=len([field for field in DANA_DATA_FIELDS.split(",") if field.strip()]),
+    )
     body = get_json(data_url, headers)
+    log_event("data_retrieval_response_shape", shape=summarize_data_shape(body))
     data = body.get("data") or body.get("tomador") or body
     if isinstance(data, list):
         data = data[0] if data else {}
+    log_event("data_retrieval_data_shape", shape=summarize_data_shape(data))
 
     expected_tomador_id = get_first_value(data, "TOMADOR_ID", "tomadorId", "TOMADORID") or tomador_id
     cedula_tomador = get_first_value(
@@ -359,7 +407,7 @@ def retrieve_tomador(tomador_id, portal_token):
         "CI",
     )
 
-    return {
+    expediente = {
         "tomadorId": expected_tomador_id,
         "dataId": tomador_id,
         "nombreTomador": get_first_value(
@@ -397,6 +445,15 @@ def retrieve_tomador(tomador_id, portal_token):
         ),
         "maximoIntentos": int(get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS") or 3),
     }
+    log_event(
+        "expediente_extracted",
+        dataIdPreview=preview_value(tomador_id),
+        tomadorIdPreview=preview_value(expediente.get("tomadorId")),
+        hasNombreTomador=bool(expediente.get("nombreTomador")),
+        hasCedulaTomador=bool(expediente.get("cedulaTomador")),
+        expedienteCompletado=expediente.get("expedienteCompletado"),
+    )
+    return expediente
 
 
 def start_project_conversation(project_id, fields, portal_token):
@@ -659,6 +716,12 @@ def lambda_handler(event, context):
     del context
     try:
         method, path = get_method_and_path(event)
+        log_event(
+            "request_received",
+            method=method,
+            path=path,
+            queryKeys=list(get_query_params(event).keys()),
+        )
         if method == "OPTIONS":
             return empty_response(204)
 
