@@ -22,6 +22,12 @@ DANAconnect email
 -> Trigger update sobre el mismo registro
 ```
 
+## Criterio de demo
+
+El POC valida la cedula usando `TOMADOR_ID` como fuente de verdad. `TOMADOR_ID` se obtiene desde Data Retrieval y debe incluir nacionalidad y numero. El nombre del tomador se muestra como referencia, pero no se usa para aprobar o rechazar el documento.
+
+Si el expediente ya fue completado, el portal bloquea nuevas cargas. La condicion de cierre es `ESTADO_VALIDOC = COMPLETED` o `ADJUNTADOC1` con fileID.
+
 ## Contrato DANA
 
 Los campos de lectura de la lista Validoc se configuran con `DANA_DATA_FIELDS`. Los campos que se escriben quedan mapeados en código porque tienen lógica de negocio.

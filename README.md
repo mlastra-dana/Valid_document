@@ -4,20 +4,41 @@ Aplicación web React para que clientes o asesores de Mercantil Seguros complete
 
 ## Objetivo
 
-El portal recibe `tomadorId` y `token` desde un enlace único, consulta el expediente, permite cargar una cédula venezolana, valida el documento mediante un servicio de IA, registra el resultado en el backend y muestra la confirmación final sin implementar autenticación propia.
+El portal recibe el `dataId` entregado por DANAconnect desde un enlace único, consulta el expediente en `POC_VALIDOC`, permite cargar una cédula venezolana, valida el documento mediante Bedrock Sonnet, sube el archivo aprobado con File Upload API y actualiza el mismo registro DANA. El POC no implementa autenticación propia; usa el enlace generado por DANA como entrada del flujo.
+
+## Estado del POC
+
+El demo se considera estable para presentación con este alcance:
+
+- Consulta de expediente desde DANA Data Retrieval usando el `dataId` del enlace.
+- Obtención de `TOMADOR_ID` desde el registro DANA.
+- Validación de cédula venezolana por nacionalidad y número exactos contra `TOMADOR_ID`.
+- Carga de PDF, JPG, JPEG o PNG, con normalización backend del tipo real del archivo.
+- Tres intentos máximos por expediente.
+- Registro del último fallo conocido en DANA con motivo legible para operaciones.
+- File Upload a DANA solo cuando Bedrock valida correctamente el documento.
+- Actualización del mismo registro DANA mediante Trigger.
+- Bloqueo de nueva carga cuando `ESTADO_VALIDOC = COMPLETED` o `ADJUNTADOC1` ya tiene fileID.
+
+Fuera de alcance para este POC:
+
+- Validación de nombres y apellidos.
+- Historial completo de intentos fallidos.
+- Autenticación propia del portal.
+- Reemplazo de documentos después de expediente completado.
 
 ## Flujo funcional
 
 1. DANAconnect envía el correo inicial con el enlace de acceso.
-2. El frontend lee `tomadorId` y `token` desde `/completar-expediente`.
-3. El backend valida la relación entre token y tomador.
-4. El portal consulta el expediente.
-5. El usuario carga PDF, JPG, JPEG o PNG de máximo 10 MB.
+2. El frontend recibe el `dataId` entregado por el external trigger de DANA.
+3. La Lambda consulta Data Retrieval y obtiene `TOMADOR_ID`, nombre, cédula informativa, estado e intentos.
+4. Si el expediente ya está completado, el portal muestra cierre y no permite carga.
+5. El usuario carga PDF, JPG, JPEG o PNG de máximo 10 MB, o toma una foto desde cámara cuando el dispositivo lo permite.
 6. El frontend envía el archivo en Base64 sin prefijo Data URL.
-7. El servicio de IA valida legibilidad, tipo de documento y coincidencia.
-8. El backend compara la cédula con la información del tomador.
-9. En éxito, el backend registra e indexa en Document Manager y actualiza DANAconnect.
-10. DANAconnect maneja comunicaciones iniciales, recordatorios y refuerzos.
+7. Bedrock Sonnet valida legibilidad, tipo de documento y documento detectado.
+8. El backend compara nacionalidad más número contra `TOMADOR_ID`.
+9. En éxito, el backend sube el archivo con File Upload API y actualiza DANAconnect.
+10. En fallo, el backend actualiza el último motivo conocido para que DANA pueda continuar con refuerzo o seguimiento.
 
 ## Tecnologías
 
@@ -221,6 +242,7 @@ La carpeta `lambda/` es la referencia del código que debe estar dentro de AWS L
 
 Documentación adicional:
 
+- [Ficha del Demo POC](/Users/marialastra/Documents/Valid_document/docs/demo-poc.md)
 - [Arquitectura](/Users/marialastra/Documents/Valid_document/docs/architecture.md)
 - [Proceso Validoc](/Users/marialastra/Documents/Valid_document/docs/process.md)
 - [Lista DANA de pruebas](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-test-list-fields.md)
@@ -309,7 +331,7 @@ Los logos visibles están en `public/icono-mercantil.png` y `public/mercantilseg
 - Intentos agotados con `scenario=max-attempts`.
 - Enlace expirado con `scenario=expired`.
 - Error temporal con `scenario=server-error`.
-- Carga por drag and drop, selección manual, reemplazo y eliminación.
+- Carga por drag and drop, selección manual, cámara, eliminación con X y nueva carga.
 - Validación de tamaño y formato de archivo.
 - Responsive en 320, 375, 768, 1024 y 1440 px.
 
