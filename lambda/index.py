@@ -456,6 +456,17 @@ def parse_bool(value):
     return str(value or "").strip().lower() in {"true", "1", "si", "sí", "yes", "y"}
 
 
+def has_value(value):
+    return str(value or "").strip() != ""
+
+
+def is_completed_expediente(data):
+    status = str(get_first_value(data, "ESTADO_VALIDOC", "estadoValidoc", "estado") or "").strip().upper()
+    file_id = get_first_value(data, "ADJUNTADOC1", "RutaDoc", "CONSIGNADOC", "ConsignaDoc")
+    explicit_completed = get_first_value(data, "expedienteCompletado", "EXPEDIENTECOMPLETADO")
+    return status == "COMPLETED" or has_value(file_id) or parse_bool(explicit_completed)
+
+
 def retrieve_tomador(tomador_id, portal_token):
     data_url = build_data_retrieval_url(tomador_id)
     headers = dana_basic_headers() if use_dana_basic_auth() else dana_headers(portal_token)
@@ -518,16 +529,7 @@ def retrieve_tomador(tomador_id, portal_token):
         "tipoPersona": get_first_value(data, "tipoPersona", "TIPOPERSONA") or "natural",
         "numeroDocumentoEsperado": expected_tomador_id,
         "cedulaTomador": cedula_tomador,
-        "expedienteCompletado": parse_bool(
-            get_first_value(
-                data,
-                "expedienteCompletado",
-                "EXPEDIENTECOMPLETADO",
-                "ConsignaDoc",
-                "CONSIGNADOC",
-                "ADJUNTADOC1",
-            )
-        ),
+        "expedienteCompletado": is_completed_expediente(data),
         "fechaCompletado": get_first_value(
             data,
             "fechaCompletado",
@@ -536,7 +538,12 @@ def retrieve_tomador(tomador_id, portal_token):
         ),
         "intentosRealizados": int(
             get_first_value(
-                data, "intentosRealizados", "INTENTOSREALIZADOS", "IntentosValidaDoc", "INTENTOSVALIDADOC"
+                data,
+                "intentosRealizados",
+                "INTENTOSREALIZADOS",
+                "INTENTOS_VALIDOC",
+                "IntentosValidaDoc",
+                "INTENTOSVALIDADOC",
             )
             or 0
         ),

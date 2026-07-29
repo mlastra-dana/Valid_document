@@ -26,7 +26,7 @@ docs/dana/validoc-test-list-template.csv
 
 `DOCUMENTO_DETECTADO`: identificador leído por Bedrock, con nacionalidad y número cuando sea posible. Es texto de auditoría, no adjunto.
 
-`ESTADO_VALIDOC`: estado final del proceso. Ejemplos: `COMPLETED`, `VALIDATION_FAILED`.
+`ESTADO_VALIDOC`: estado del proceso. Ejemplos: `COMPLETED`, `VALIDATION_FAILED`. Si está en `COMPLETED`, el portal no permite cargar otro documento para ese expediente.
 
 `FECHAULTIMOVALIDOC`: fecha/hora de la última actualización del proceso.
 

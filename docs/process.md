@@ -23,6 +23,8 @@ Authorization: Basic ...
 
 El `dataId` viene del enlace entregado por DANA. `TOMADOR_ID` no viaja en el link; se obtiene desde Data Retrieval y queda como identificador esperado para validar la cédula.
 
+Si el registro ya está completado, el portal no permite cargar otro documento para ese mismo expediente. Se considera completado cuando `ESTADO_VALIDOC` es `COMPLETED` o cuando `ADJUNTADOC1` ya contiene un `fileID`.
+
 ## Validación
 
 El usuario puede intentar cargar el documento hasta tres veces.
@@ -58,6 +60,8 @@ Si el documento es válido:
 2. DANAconnect retorna `fileID`.
 3. La Lambda actualiza el mismo registro DANA usando el `dataId` del enlace.
 4. El frontend muestra la confirmación final.
+
+Si el cliente vuelve a abrir el mismo enlace después de completado, Data Retrieval retorna el estado actualizado y el portal muestra la pantalla de expediente completado sin habilitar carga.
 
 ## Ciclo validado en CloudWatch
 
