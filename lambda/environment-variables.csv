@@ -10,7 +10,7 @@ DANA_CLIENT_ID,,Si si no hay DANA_ACCESS_TOKEN,OAuth,Client ID para obtener acce
 DANA_CLIENT_SECRET,,Si si no hay DANA_ACCESS_TOKEN,OAuth,Client secret para obtener access token.
 DANA_OAUTH_SCOPE,,No,OAuth,Scope requerido por DANAconnect si aplica.
 DANA_OAUTH_AUTH_METHOD,basic,No,OAuth,Metodo para enviar client credentials al token endpoint. Usar basic o body.
-DANA_DATA_FIELDS,"ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID",Si,Data Retrieval,Campos de POC_VALIDOC que la Lambda solicita a DANAconnect.
+DANA_DATA_FIELDS,"ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID",Si,Data Retrieval,Campos de POC_VALIDOC que la Lambda solicita a DANAconnect. TOMADOR_ID_COMPLETADO permite bloquear duplicados cuando otro UID del mismo TOMADOR_ID ya fue completado.
 DANA_FIELDS_QUERY_PARAM,fieldList,No,Data Retrieval v2,Nombre del query parameter para campos cuando se use v2 Bearer.
 DANA_CONVERSATION_DEBUG,0,No,DANAconnect,Header X-DEBUG para llamadas a Conversation API y File Upload.
 DANA_TIMEOUT_SECONDS,20,No,DANAconnect,Timeout en segundos para llamadas HTTP a DANAconnect.

@@ -25,7 +25,22 @@ El `dataId` viene del enlace entregado por DANA. `TOMADOR_ID` no viaja en el lin
 
 `UID` es la referencia única de la fila DANA. La Lambda lo lee como `recordUid` cuando Data Retrieval lo entrega y lo conserva para trazabilidad del intento. No se usa `TOMADOR_ID` como llave de actualización.
 
-Si el registro ya está completado, el portal no permite cargar otro documento para ese mismo expediente. Se considera completado cuando `ESTADO_VALIDOC` es `COMPLETED` o cuando `ADJUNTADOC1` ya contiene un `fileID`.
+Si el registro actual ya está completado, el portal no permite cargar otro documento para ese mismo expediente. Se considera completado cuando `ESTADO_VALIDOC` es `COMPLETED` o cuando `ADJUNTADOC1` ya contiene un `fileID`.
+
+`TOMADOR_ID` es mandatorio porque identifica al cliente y es el valor contra el que se valida la cédula. La regla de negocio global es: si DANA ya tiene ese `TOMADOR_ID` como completado en cualquier `UID`, el portal no debe permitir una nueva carga y debe mostrar la pantalla de completado.
+
+Como Data Retrieval entrega el registro asociado al `dataId` abierto, DANA debe incluir en ese registro un indicador de duplicado completado, por ejemplo `TOMADOR_ID_COMPLETADO=1`. La Lambda también acepta alias como `TOMADOR_COMPLETADO`, `TOMADOR_VALIDADO` o `TOMADORID_COMPLETADO`. Si ese indicador viene en verdadero, el portal trata el expediente como completado aunque el `UID` actual esté pendiente.
+
+## Control previo en DANA
+
+Antes de enviar un nuevo correo o crear un nuevo ciclo para un `TOMADOR_ID`, DANA debe validar si ese tomador ya tiene un expediente completado en `POC_VALIDOC`.
+
+Regla esperada:
+
+1. Si no existe otro `UID` completado para ese `TOMADOR_ID`, el registro nuevo puede quedar pendiente y el portal permite la carga.
+2. Si existe cualquier `UID` completado para ese `TOMADOR_ID`, DANA no debería iniciar una nueva validación. Si por operación se genera el nuevo registro/enlace, ese registro debe viajar con `TOMADOR_ID_COMPLETADO=1` para que el portal vaya directo a la pantalla de completado.
+
+Caso importante: si se crea un `UID` nuevo con el mismo `TOMADOR_ID` y ese registro viene limpio, sin `ESTADO_VALIDOC`, sin `ADJUNTADOC1` y sin `TOMADOR_ID_COMPLETADO`, la Lambda no puede saber con Data Retrieval que otro `UID` ya fue completado. En ese escenario el portal lo trataría como pendiente. Por eso el control por `TOMADOR_ID` debe ocurrir en DANA antes de enviar el enlace, o debe existir un API adicional que permita buscar completados por `TOMADOR_ID`.
 
 ## Validación
 
@@ -41,6 +56,8 @@ Cada intento:
 Después de abrir el expediente, la validación usa el `TOMADOR_ID` ya obtenido y no vuelve a consultar Data Retrieval antes de Bedrock. Esto permite que el cliente tenga más margen para corregir y subir el documento dentro de la misma sesión del portal.
 
 Cuando DANA envia un nuevo correo o recordatorio con un nuevo `dataId`, el portal inicia nuevamente el contador visible en 0 intentos usados. `INTENTOS_VALIDOC` queda como auditoria del ultimo resultado conocido, pero no bloquea un nuevo correo pendiente.
+
+Refrescar la pagina vuelve a consultar el expediente, pero no cuenta como intento. Un intento se consume solo cuando el usuario adjunta/toma un documento y la Lambda devuelve una respuesta de validacion activa para ese archivo.
 
 ## Fallos
 
@@ -65,7 +82,7 @@ Si el documento es válido:
 3. La Lambda actualiza el mismo registro DANA usando el `dataId` del enlace y registra `recordUid` en logs para validar trazabilidad con la fila DANA.
 4. El frontend muestra la confirmación final.
 
-Si el cliente vuelve a abrir el mismo enlace después de completado, Data Retrieval retorna el estado actualizado y el portal muestra la pantalla de expediente completado sin habilitar carga.
+Si el cliente vuelve a abrir el mismo enlace después de completado, Data Retrieval retorna el estado actualizado y el portal muestra la pantalla de expediente completado sin habilitar carga. Si abre un enlace de otro `UID` con el mismo `TOMADOR_ID`, DANA debe retornar `TOMADOR_ID_COMPLETADO=1` para aplicar el mismo cierre.
 
 ## Ciclo validado en CloudWatch
 

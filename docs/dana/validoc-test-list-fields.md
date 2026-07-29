@@ -10,7 +10,7 @@ docs/dana/validoc-test-list-template.csv
 
 ## Campos POC_VALIDOC
 
-`TOMADOR_ID`: identificador esperado para validar coincidencia exacta contra Bedrock. No viaja en el enlace; la Lambda lo obtiene desde Data Retrieval usando el `dataId` entregado por DANA. Debe incluir nacionalidad y número. Ejemplo: `V-5002012` o `E-1016824`.
+`TOMADOR_ID`: identificador esperado para validar coincidencia exacta contra Bedrock. No viaja en el enlace; la Lambda lo obtiene desde Data Retrieval usando el `dataId` entregado por DANA. Debe incluir nacionalidad y número. Ejemplo: `V-5002012` o `E-1016824`. Es mandatorio como identificador del cliente.
 
 `NOMBRETOMADOR`: nombre visible en el portal.
 
@@ -26,7 +26,11 @@ docs/dana/validoc-test-list-template.csv
 
 `DOCUMENTO_DETECTADO`: identificador leído por Bedrock, con nacionalidad y número cuando sea posible. Es texto de auditoría, no adjunto.
 
-`ESTADO_VALIDOC`: estado del proceso. Ejemplos: `COMPLETED`, `VALIDATION_FAILED`. Si está en `COMPLETED`, el portal no permite cargar otro documento para ese expediente.
+`ESTADO_VALIDOC`: estado del proceso. Ejemplos: `COMPLETED`, `VALIDATION_FAILED`. Si el registro actual está en `COMPLETED`, el portal no permite cargar otro documento para ese expediente.
+
+`TOMADOR_ID_COMPLETADO`: indicador recomendado para aplicar la regla global por cliente. Debe venir verdadero (`1`, `SI`, `true`) cuando DANA detecte que existe otro registro/`UID` con el mismo `TOMADOR_ID` y estado completado. Si viene verdadero, el portal muestra la pantalla de completado y no permite cargar, aunque el `UID` actual esté pendiente.
+
+Este campo debe resolverse antes de enviar el enlace del portal. Si se crea un registro duplicado limpio con el mismo `TOMADOR_ID` y este campo viene vacío, la Lambda no puede detectar la duplicidad usando solo Data Retrieval, porque Data Retrieval retorna únicamente el registro del `dataId` abierto.
 
 `FECHAULTIMOVALIDOC`: fecha/hora de la última actualización del proceso.
 
@@ -43,6 +47,10 @@ docs/dana/validoc-test-list-template.csv
 Estos campos forman parte del contrato del proceso Validoc. `DANA_DATA_FIELDS` controla los campos que Data Retrieval lee desde `POC_VALIDOC`; los campos que la Lambda actualiza con Trigger se mantienen mapeados en código porque tienen lógica asociada.
 
 Data Retrieval solicita la lista completa para que el portal pueda mostrar el expediente y comparar contra `TOMADOR_ID`.
+
+Para bloquear duplicados por cliente, `DANA_DATA_FIELDS` debe incluir `TOMADOR_ID_COMPLETADO` o un alias soportado por la Lambda. Sin ese campo, la Lambda solo puede decidir con la información del registro actual que devuelve Data Retrieval.
+
+Si más adelante DANA expone un endpoint de búsqueda por `TOMADOR_ID`, la Lambda podría reemplazar este indicador por una consulta adicional. Para el POC actual, el contrato estable es que DANA entregue el indicador ya calculado.
 
 La actualización de éxito sobre el mismo registro envía:
 

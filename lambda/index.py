@@ -43,7 +43,7 @@ DANA_DATA_FIELDS = os.environ.get(
     (
         "ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,"
         "FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,"
-        "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID"
+        "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID"
     ),
 )
 DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
@@ -460,11 +460,35 @@ def has_value(value):
     return str(value or "").strip() != ""
 
 
-def is_completed_expediente(data):
+def tomador_id_completed_flag(data):
+    return parse_bool(
+        get_first_value(
+            data,
+            "TOMADOR_ID_COMPLETADO",
+            "TOMADOR_COMPLETADO",
+            "TOMADOR_VALIDADO",
+            "TOMADORID_COMPLETADO",
+        )
+    )
+
+
+def completion_source(data):
     status = str(get_first_value(data, "ESTADO_VALIDOC", "estadoValidoc", "estado") or "").strip().upper()
     file_id = get_first_value(data, "ADJUNTADOC1", "RutaDoc", "CONSIGNADOC", "ConsignaDoc")
     explicit_completed = get_first_value(data, "expedienteCompletado", "EXPEDIENTECOMPLETADO")
-    return status == "COMPLETED" or has_value(file_id) or parse_bool(explicit_completed)
+    if status == "COMPLETED":
+        return "record_status"
+    if has_value(file_id):
+        return "file_id"
+    if parse_bool(explicit_completed):
+        return "explicit_flag"
+    if tomador_id_completed_flag(data):
+        return "tomador_id_completed"
+    return ""
+
+
+def is_completed_expediente(data):
+    return bool(completion_source(data))
 
 
 def retrieve_tomador(tomador_id, portal_token):
@@ -540,6 +564,7 @@ def retrieve_tomador(tomador_id, portal_token):
         ),
         "intentosRealizados": 0,
         "maximoIntentos": int(get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS") or 3),
+        "tomadorIdCompletado": tomador_id_completed_flag(data),
     }
     log_event(
         "expediente_extracted",
@@ -549,6 +574,8 @@ def retrieve_tomador(tomador_id, portal_token):
         hasNombreTomador=bool(expediente.get("nombreTomador")),
         hasCedulaTomador=bool(expediente.get("cedulaTomador")),
         expedienteCompletado=expediente.get("expedienteCompletado"),
+        tomadorIdCompletado=expediente.get("tomadorIdCompletado"),
+        completionSource=completion_source(data),
     )
     return expediente
 

@@ -236,7 +236,7 @@ export const CompleteExpedientePage = () => {
 
   return (
     <PageContainer>
-      <PendingExpediente expediente={expediente} token={token} />
+      <PendingExpediente key={expediente.dataId || danaId} expediente={expediente} token={token} />
     </PageContainer>
   );
 };

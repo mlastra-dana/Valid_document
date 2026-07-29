@@ -20,6 +20,7 @@ El demo se considera estable para presentación con este alcance:
 - File Upload a DANA solo cuando Bedrock valida correctamente el documento.
 - Actualización del mismo registro DANA mediante Trigger.
 - Bloqueo de nueva carga cuando `ESTADO_VALIDOC = COMPLETED` o `ADJUNTADOC1` ya tiene fileID.
+- Bloqueo de carga cuando DANA indique que ese `TOMADOR_ID` ya tiene un expediente completado, aunque el enlace pertenezca a otro `UID`.
 
 Fuera de alcance para este POC:
 
@@ -33,7 +34,7 @@ Fuera de alcance para este POC:
 1. DANAconnect envía el correo inicial con el enlace de acceso.
 2. El frontend recibe el `dataId` entregado por el external trigger de DANA.
 3. La Lambda consulta Data Retrieval y obtiene `TOMADOR_ID`, `UID`, nombre, cédula informativa y estado.
-4. Si el expediente ya está completado, el portal muestra cierre y no permite carga.
+4. Si el registro actual ya está completado, o DANA indica que el `TOMADOR_ID` ya fue completado en otro `UID`, el portal muestra cierre y no permite carga.
 5. El usuario carga PDF, JPG, JPEG o PNG de máximo 10 MB, o toma una foto desde cámara cuando el dispositivo lo permite.
 6. El frontend envía el archivo en Base64 sin prefijo Data URL.
 7. Bedrock Sonnet valida legibilidad, tipo de documento y documento detectado.
@@ -230,7 +231,7 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_OAUTH_SCOPE=
-DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID
+DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_CONVERSATION_DEBUG=0
@@ -252,7 +253,9 @@ Documentación adicional:
 
 ## Integración con DANAconnect
 
-DANAconnect genera el enlace y entrega el `dataId` que permite leer el expediente con Data Retrieval. `TOMADOR_ID` se obtiene desde el registro DANA y se usa como valor esperado para validar la cédula. El portal informa resultados al backend para que DANAconnect continúe el flujo correspondiente.
+DANAconnect genera el enlace y entrega el `dataId` que permite leer el expediente con Data Retrieval. `TOMADOR_ID` se obtiene desde el registro DANA y se usa como valor esperado para validar la cédula. Si otro `UID` con el mismo `TOMADOR_ID` ya está completado, DANA debe entregar `TOMADOR_ID_COMPLETADO=1` o equivalente para que el portal cierre el flujo sin permitir carga. El portal informa resultados al backend para que DANAconnect continúe el flujo correspondiente.
+
+Si se crea un registro nuevo limpio con el mismo `TOMADOR_ID`, el portal solo verá ese registro por Data Retrieval. Para evitar una nueva validación, DANA debe hacer el control previo por `TOMADOR_ID` antes de enviar el correo o entregar el indicador `TOMADOR_ID_COMPLETADO`.
 
 ## Integración con Document Manager
 

@@ -6,6 +6,7 @@ export interface Expediente {
   tipoPersona?: "natural" | "juridica";
   numeroDocumentoEsperado?: string;
   expedienteCompletado: boolean;
+  tomadorIdCompletado?: boolean;
   fechaCompletado?: string | null;
   intentosRealizados: number;
   maximoIntentos: number;
