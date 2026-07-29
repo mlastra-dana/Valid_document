@@ -40,7 +40,7 @@ docs/dana/validoc-test-list-template.csv
 
 ## Uso en la Lambda
 
-Estos campos forman parte del contrato fijo del proceso Validoc. La Lambda los define en código para Data Retrieval y para el JSON enviado a Start Conversation; no se configuran como variables de entorno.
+Estos campos forman parte del contrato del proceso Validoc. `DANA_DATA_FIELDS` controla los campos que Data Retrieval lee desde `POC_VALIDOC`; los campos que la Lambda escribe en Start Conversation se mantienen mapeados en código porque tienen lógica asociada.
 
 Data Retrieval solicita la lista completa para que el portal pueda mostrar el expediente y comparar contra `TOMADOR_ID`.
 

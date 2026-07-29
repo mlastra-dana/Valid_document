@@ -16,7 +16,8 @@ const readPositiveNumber = (value: string | undefined, fallback: number): number
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const requiredUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+const requiredUrl =
+  import.meta.env.VITE_API_BASE_URL?.trim() || import.meta.env.VITE_API_URL?.trim();
 
 export const env: AppEnv = {
   apiBaseUrl: requiredUrl || "https://api.example.com",

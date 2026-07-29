@@ -61,13 +61,14 @@ Copia `.env.example` a `.env.local` para desarrollo:
 
 ```env
 VITE_API_BASE_URL=https://api.example.com
+VITE_API_URL=
 VITE_USE_MOCK_API=false
 VITE_APP_NAME=Portal de Consignación de Documento de Identidad
 VITE_MAX_FILE_SIZE_MB=10
 VITE_REQUEST_TIMEOUT_MS=30000
 ```
 
-En pruebas integradas y producción, `VITE_API_BASE_URL` debe apuntar a la Function URL de la Lambda backend.
+En pruebas integradas y producción, `VITE_API_BASE_URL` debe apuntar a la Function URL de la Lambda backend. El frontend también acepta `VITE_API_URL` como alias para ambientes donde ya exista ese nombre.
 
 No agregues credenciales sensibles al frontend. No deben existir variables como `AWS_SECRET_ACCESS_KEY`, `AWS_ACCESS_KEY_ID`, contraseñas, API keys privadas ni credenciales de DANAconnect.
 
@@ -205,6 +206,7 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_OAUTH_SCOPE=
+DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_SUCCESS_PROJECT_ID=

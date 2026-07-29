@@ -48,6 +48,7 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_OAUTH_SCOPE=
+DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_SUCCESS_PROJECT_ID=
@@ -63,6 +64,8 @@ Para Data Retrieval hay dos caminos:
 
 - Si configuras `DANA_USERNAME` y `DANA_PASSWORD`, se usa el camino estable probado: `GET /api/1.0/rest/conversation/data/{dana}?fields=...` con `Authorization: Basic ...`.
 - Si no configuras usuario/password, se usa compatibilidad v2: `GET /api/2.0/rest/conversation/data/{dana}?{DANA_FIELDS_QUERY_PARAM}=...` con bearer token.
+
+`DANA_DATA_FIELDS` controla los campos leídos desde `POC_VALIDOC`. Si agregas un campo de solo lectura, puedes actualizar esta variable sin tocar código.
 
 Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
 

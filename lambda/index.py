@@ -37,10 +37,13 @@ DANA_CLIENT_SECRET = os.environ.get("DANA_CLIENT_SECRET", "")
 DANA_USERNAME = os.environ.get("DANA_USERNAME", "")
 DANA_PASSWORD = os.environ.get("DANA_PASSWORD", "")
 DANA_OAUTH_SCOPE = os.environ.get("DANA_OAUTH_SCOPE", "")
-VALIDOC_DATA_FIELDS = (
-    "ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,"
-    "FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,"
-    "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID"
+DANA_DATA_FIELDS = os.environ.get(
+    "DANA_DATA_FIELDS",
+    (
+        "ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,"
+        "FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,"
+        "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,UID"
+    ),
 )
 DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
 DANA_OAUTH_AUTH_METHOD = os.environ.get("DANA_OAUTH_AUTH_METHOD", "basic").lower()
@@ -306,7 +309,7 @@ def get_json(url, headers):
 def build_data_retrieval_url(dana_identifier):
     api_version = "1.0" if use_dana_basic_auth() else "2.0"
     query_param_name = "fields" if use_dana_basic_auth() else DANA_FIELDS_QUERY_PARAM
-    query = urllib.parse.urlencode({query_param_name: VALIDOC_DATA_FIELDS})
+    query = urllib.parse.urlencode({query_param_name: DANA_DATA_FIELDS})
     encoded_dana = urllib.parse.quote(dana_identifier, safe="")
     return f"{DANA_BASE_URL}/api/{api_version}/rest/conversation/data/{encoded_dana}?{query}"
 
