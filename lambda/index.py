@@ -554,6 +554,13 @@ def parse_bool(value):
     return str(value or "").strip().lower() in {"true", "1", "si", "sí", "yes", "y"}
 
 
+def parse_int(value, default=0):
+    try:
+        return int(float(str(value or "").strip()))
+    except (TypeError, ValueError):
+        return default
+
+
 def has_value(value):
     return str(value or "").strip() != ""
 
@@ -660,8 +667,18 @@ def retrieve_tomador(tomador_id, portal_token):
             "FECHACOMPLETADO",
             "FECHAULTIMOVALIDOC",
         ),
-        "intentosRealizados": 0,
-        "maximoIntentos": int(get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS") or 3),
+        "intentosRealizados": parse_int(
+            get_first_value(
+                data,
+                "INTENTOS_VALIDOC",
+                "intentosRealizados",
+                "INTENTOSREALIZADOS",
+            )
+        ),
+        "maximoIntentos": parse_int(
+            get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS"),
+            3,
+        ),
         "tomadorIdCompletado": tomador_id_completed_flag(data),
     }
     log_event(
@@ -831,6 +848,7 @@ def upload_document(payload):
                 "fileID": file_id,
                 "fileName": upload_result.get("fileName") or payload["document"]["fileName"],
                 "detectedDocumentNumber": payload.get("detectedDocumentNumber"),
+                "attemptsUsed": payload.get("attemptsUsed"),
             },
         ),
         payload.get("recordUid"),

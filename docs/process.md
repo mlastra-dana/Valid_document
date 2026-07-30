@@ -61,7 +61,7 @@ La auditoría de tokens no modifica el expediente de Validoc y no bloquea al usu
 
 Después de abrir el expediente, la validación usa el `TOMADOR_ID` ya obtenido y no vuelve a consultar Data Retrieval antes de Bedrock. Esto permite que el cliente tenga más margen para corregir y subir el documento dentro de la misma sesión del portal.
 
-Cuando DANA envia un nuevo correo o recordatorio con un nuevo `dataId`, el portal inicia nuevamente el contador visible en 0 intentos usados. `INTENTOS_VALIDOC` queda como auditoria del ultimo resultado conocido, pero no bloquea un nuevo correo pendiente.
+Cuando DANA envia un nuevo correo o recordatorio con un nuevo `dataId`, el portal inicia el ciclo de ese registro. Si el mismo enlace se recarga, el portal toma `INTENTOS_VALIDOC` del registro actual para mantener el contador visible alineado con DANA.
 
 Refrescar la pagina vuelve a consultar el expediente, pero no cuenta como intento. Un intento se consume solo cuando el usuario adjunta/toma un documento y la Lambda devuelve una respuesta de validacion activa para ese archivo.
 
@@ -69,9 +69,9 @@ Refrescar la pagina vuelve a consultar el expediente, pero no cuenta como intent
 
 No se guarda un historial de cada intento fallido en DANA.
 
-Si falla un intento, la Lambda actualiza los campos del último resultado conocido: `MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC` y `FECHAULTIMOVALIDOC`. Si el cliente abandona después del primer intento, DANA conserva ese último motivo.
+Si falla un intento, la Lambda actualiza los campos del último resultado conocido: `MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC` y `FECHAULTIMOVALIDOC`. Si el cliente abandona después del primer intento, DANA conserva ese último motivo y el contador usado.
 
-El portal permite continuar mientras queden intentos disponibles en el enlace actual. Si falla el tercer intento, el estado queda como `VALIDATION_FAILED` para que DANA pueda enviar refuerzo o seguimiento. Un nuevo correo pendiente puede iniciar otro ciclo de tres intentos.
+El portal permite continuar mientras queden intentos disponibles en el enlace actual. Si el intento final valida correctamente, el estado queda `COMPLETED` y `INTENTOS_VALIDOC` conserva el total de intentos usados en ese ciclo. Si falla el tercer intento, el estado queda como `VALIDATION_FAILED` para que DANA pueda enviar refuerzo o seguimiento.
 
 Los motivos se escriben en DANA como textos operativos legibles, por ejemplo:
 

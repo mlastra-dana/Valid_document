@@ -178,7 +178,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
             recordUid: expediente.recordUid,
             detectedDocumentNumber: response.validation.detectedDocumentNumber,
             fileName: selected.file.name
-          }, abortController.signal);
+          });
           if (!isCurrentRun()) return;
 
           if (response.attempts.remaining <= 0 || response.validation.reasonCode === "MAX_ATTEMPTS_REACHED") {
@@ -195,6 +195,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
           tomadorId: expediente.tomadorId,
           dataId: expediente.dataId,
           recordUid: expediente.recordUid,
+          attemptsUsed: response.attempts.used,
           detectedDocumentNumber: response.validation.detectedDocumentNumber ?? "",
           document
         }, abortController.signal);

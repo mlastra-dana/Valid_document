@@ -35,7 +35,7 @@ Para una prueba estable, cada registro de `POC_VALIDOC` debe tener:
 - `EMAIL_TOMADOR`: recomendado para comunicaciones.
 - `ESTADO_VALIDOC`: control del proceso.
 - `ADJUNTADOC1`: fileID final cuando el documento fue aceptado.
-- `INTENTOS_VALIDOC`: intentos usados en el ultimo correo/proceso. Es auditoria, no bloqueo permanente.
+- `INTENTOS_VALIDOC`: intentos usados en el ultimo correo/proceso. El portal lo lee al recargar el mismo enlace para mantener DANA y pantalla alineados.
 - `MOTIVOFALLO`: ultimo motivo legible de fallo.
 - `DOCUMENTO_DETECTADO`: documento leido por Bedrock.
 - `NOMBRE_ARCHIVO_DOC`: nombre del archivo cargado.
@@ -82,7 +82,7 @@ Cuando el documento no pasa, DANA conserva el ultimo resultado conocido:
 
 No se guarda historial completo de intentos. Se guarda el ultimo motivo para que soporte, KAM u operaciones puedan entender el caso aunque el usuario abandone.
 
-Si DANA envia un recordatorio o nuevo correo porque el expediente sigue pendiente, ese nuevo enlace debe permitir tres intentos nuevamente. `INTENTOS_VALIDOC` puede conservar el valor anterior como referencia operativa, pero el portal no lo usa como bloqueo global.
+Si DANA envia un recordatorio o nuevo correo porque el expediente sigue pendiente, ese nuevo registro/enlace inicia su propio ciclo. Dentro del mismo enlace, `INTENTOS_VALIDOC` conserva el contador real usado y no se borra si el ultimo intento valida correctamente.
 
 Refrescar la pagina no consume intentos. Los intentos se cuentan solamente cuando se procesa una validacion de documento activa.
 

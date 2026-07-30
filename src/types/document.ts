@@ -49,6 +49,7 @@ export interface DocumentRegistrationPayload {
   tomadorId: string;
   dataId?: string;
   recordUid?: string;
+  attemptsUsed?: number;
   detectedDocumentNumber: string;
   document: EncodedDocument;
 }
