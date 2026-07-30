@@ -29,8 +29,6 @@ Se registra cada respuesta de Bedrock, tanto resultados exitosos como fallidos. 
 
 ## Campos sugeridos
 
-`DATA_ID`: identificador del enlace/proceso recibido desde DANA. Permite asociar la auditoría al ciclo exacto consultado por Data Retrieval.
-
 `LAMBDA_NAME`: nombre de la Lambda que hizo la invocación. Se toma automáticamente de `AWS_LAMBDA_FUNCTION_NAME`, variable que AWS Lambda inyecta en runtime.
 
 `MODEL_ID`: modelo Bedrock usado en la validación.
@@ -45,8 +43,6 @@ Se registra cada respuesta de Bedrock, tanto resultados exitosos como fallidos. 
 
 `TOKEN_OUTPUT`: tokens de salida reportados por Bedrock.
 
-`TOMADOR_ID`: identificador del cliente usado para validar la cédula.
-
 `UID`: identificador interno/autonumérico de la lista `Bedrock_logs`. No lo envía la Lambda.
 
 `FECHA`: este campo existe en la lista, pero no lo envía la Lambda. Lo llena el flujo DANA con un nodo update.
@@ -57,9 +53,7 @@ La Lambda usa estos códigos por defecto:
 
 ```json
 {
-  "dataId": "DATA_ID",
   "lambdaName": "LAMBDA_NAME",
-  "tomadorId": "TOMADOR_ID",
   "modelId": "MODEL_ID",
   "inputTokens": "TOKEN_INPUT",
   "outputTokens": "TOKEN_OUTPUT",

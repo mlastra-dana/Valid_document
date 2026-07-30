@@ -14,7 +14,7 @@ DANA_DATA_FIELDS,"ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,E
 DANA_FIELDS_QUERY_PARAM,fieldList,No,Data Retrieval v2,Nombre del query parameter para campos cuando se use v2 Bearer.
 DANA_CONVERSATION_DEBUG,0,No,DANAconnect,Header X-DEBUG para llamadas a Conversation API y File Upload.
 DANA_TOKEN_AUDIT_PROJECT_ID,,No,Auditoria tokens,ProjectID de la conversacion/lista DANA donde se registran los tokens consumidos por Bedrock. Si queda vacio no se registra auditoria.
-DANA_TOKEN_AUDIT_FIELDS_JSON,"{""dataId"":""DATA_ID"",""lambdaName"":""LAMBDA_NAME"",""tomadorId"":""TOMADOR_ID"",""modelId"":""MODEL_ID"",""inputTokens"":""TOKEN_INPUT"",""outputTokens"":""TOKEN_OUTPUT"",""totalTokens"":""TOKENS_TOTALES"",""reasonCode"":""RESULTADO_VALIDOC"",""fileName"":""NOMBRE_ARCHIVO_DOC""}",No,Auditoria tokens,Mapa JSON opcional para adaptar los nombres de campo de la lista DANA de tokens sin cambiar codigo.
+DANA_TOKEN_AUDIT_FIELDS_JSON,"{""lambdaName"":""LAMBDA_NAME"",""modelId"":""MODEL_ID"",""inputTokens"":""TOKEN_INPUT"",""outputTokens"":""TOKEN_OUTPUT"",""totalTokens"":""TOKENS_TOTALES"",""reasonCode"":""RESULTADO_VALIDOC"",""fileName"":""NOMBRE_ARCHIVO_DOC""}",No,Auditoria tokens,Mapa JSON opcional para adaptar los nombres de campo de la lista DANA de tokens sin cambiar codigo.
 DANA_TIMEOUT_SECONDS,20,No,DANAconnect,Timeout en segundos para llamadas HTTP a DANAconnect.
 BEDROCK_REGION,us-east-1,Si,Bedrock,Region AWS donde se invoca Bedrock.
 BEDROCK_MODEL_ID,anthropic.claude-3-5-sonnet-20240620-v1:0,Si,Bedrock,Modelo Sonnet usado para validar el documento.

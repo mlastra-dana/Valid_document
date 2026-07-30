@@ -76,9 +76,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 _TOKEN_CACHE = {"access_token": "", "expires_at": 0}
 _ATTEMPTS_CACHE = {}
 DEFAULT_TOKEN_AUDIT_FIELD_MAP = {
-    "dataId": "DATA_ID",
     "lambdaName": "LAMBDA_NAME",
-    "tomadorId": "TOMADOR_ID",
     "modelId": "MODEL_ID",
     "inputTokens": "TOKEN_INPUT",
     "outputTokens": "TOKEN_OUTPUT",
@@ -479,9 +477,7 @@ def parse_bedrock_token_usage(decoded_response):
 def build_token_audit_fields(context, validation, token_usage):
     field_map = token_audit_field_map()
     values = {
-        "dataId": context.get("dataId", ""),
         "lambdaName": LAMBDA_NAME,
-        "tomadorId": context.get("tomadorId", ""),
         "modelId": BEDROCK_MODEL_ID,
         "inputTokens": str(token_usage.get("inputTokens", 0)),
         "outputTokens": str(token_usage.get("outputTokens", 0)),
