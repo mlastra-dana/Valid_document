@@ -195,17 +195,61 @@ def get_case_insensitive(data, key):
     return None
 
 
+def unwrap_field_value(value):
+    if isinstance(value, dict):
+        for key in ("value", "Value", "fieldValue", "field_value", "text", "label"):
+            nested = value.get(key)
+            if nested not in (None, ""):
+                return nested
+    return value
+
+
+def get_from_field_list(fields, code):
+    if not isinstance(fields, list):
+        return None
+
+    code_lower = str(code).lower()
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        field_code = (
+            field.get("code")
+            or field.get("Code")
+            or field.get("name")
+            or field.get("Name")
+            or field.get("key")
+            or field.get("Key")
+        )
+        if str(field_code or "").lower() != code_lower:
+            continue
+        return unwrap_field_value(
+            field.get("value")
+            or field.get("Value")
+            or field.get("fieldValue")
+            or field.get("field_value")
+            or field.get("text")
+        )
+    return None
+
+
 def extract_field(data, code):
     if not isinstance(data, dict):
         return ""
 
-    candidates = [get_case_insensitive(data, code)]
+    candidates = [
+        get_case_insensitive(data, code),
+        get_from_field_list(data.get("fields"), code),
+        get_from_field_list(data.get("fieldList"), code),
+    ]
     for container_key in ("record", "fields", "contact", "data", "tomador"):
         container = data.get(container_key)
         if isinstance(container, dict):
             candidates.append(get_case_insensitive(container, code))
+            candidates.append(get_from_field_list(container.get("fields"), code))
+            candidates.append(get_from_field_list(container.get("fieldList"), code))
 
     for value in candidates:
+        value = unwrap_field_value(value)
         if value not in (None, ""):
             return value
     return ""
@@ -565,6 +609,15 @@ def has_value(value):
     return str(value or "").strip() != ""
 
 
+def normalize_status(value):
+    return re.sub(r"[^A-Z0-9]", "_", str(value or "").strip().upper()).strip("_")
+
+
+def is_completed_status(value):
+    status = normalize_status(value)
+    return status in {"COMPLETED", "COMPLETADO", "EXPEDIENTE_COMPLETADO", "VALIDOC_COMPLETED"}
+
+
 def tomador_id_completed_flag(data):
     return parse_bool(
         get_first_value(
@@ -578,10 +631,10 @@ def tomador_id_completed_flag(data):
 
 
 def completion_source(data):
-    status = str(get_first_value(data, "ESTADO_VALIDOC", "estadoValidoc", "estado") or "").strip().upper()
+    status = get_first_value(data, "ESTADO_VALIDOC", "estadoValidoc", "estado")
     file_id = get_first_value(data, "ADJUNTADOC1", "RutaDoc", "CONSIGNADOC", "ConsignaDoc")
     explicit_completed = get_first_value(data, "expedienteCompletado", "EXPEDIENTECOMPLETADO")
-    if status == "COMPLETED":
+    if is_completed_status(status):
         return "record_status"
     if has_value(file_id):
         return "file_id"
@@ -892,6 +945,9 @@ def build_bedrock_content(document, expected_document_number):
             "Analiza el archivo adjunto como documento de identidad.",
             "Determina si es legible, si es una cédula de identidad venezolana y extrae nacionalidad más número.",
             "No inventes datos. Si no puedes leer la nacionalidad o el número, usa null.",
+            "La cédula puede venir horizontal, vertical o rotada 90, 180 o 270 grados. Si el texto es legible, rota mentalmente la imagen y valida normalmente.",
+            "La rotación por sí sola no hace que el documento sea ilegible. Solo marca UNREADABLE_DOCUMENT si la nacionalidad o el número no se pueden leer con seguridad por borrosidad, recorte, reflejos, sombra o baja resolución.",
+            "En la cédula venezolana, la nacionalidad suele aparecer como V, E o Venezolano/Extranjero y el número puede estar separado por puntos. Extrae ambos normalizados.",
             "Responde únicamente JSON con estas claves:",
             "isReadable, isIdentityDocument, detectedDocumentNumber, reasonCode, message.",
             "detectedDocumentNumber debe incluir nacionalidad y número cuando sean legibles, por ejemplo V-12345678 o E-1016824.",

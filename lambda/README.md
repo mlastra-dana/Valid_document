@@ -95,9 +95,13 @@ POST /event/Trigger?dana={dataId}&CAMPO=valor
 
 La carga se bloquea si el registro actual está completado o si DANA informa que el mismo `TOMADOR_ID` ya fue completado en otro `UID` mediante `TOMADOR_ID_COMPLETADO=1`, `SI` o `true`. Data Retrieval no busca por sí solo en toda la lista; este indicador debe venir desde DANA o desde un endpoint de búsqueda adicional si se incorpora más adelante.
 
+Cuando Data Retrieval entrega `ESTADO_VALIDOC=COMPLETED`, el endpoint `GET /expedientes/{dataId}` responde `expedienteCompletado=true` y el frontend va directo a la pantalla de completado. La Lambda acepta el valor aunque venga como campo directo, dentro de `record`, dentro de `fields` o como objeto con `value`.
+
 Si DANA crea un registro nuevo limpio con un `TOMADOR_ID` que ya fue completado en otro `UID`, la Lambda no puede inferirlo desde Data Retrieval. En ese caso el portal lo tratará como pendiente. Por eso DANA debe validar el `TOMADOR_ID` antes de enviar el correo o llenar `TOMADOR_ID_COMPLETADO` en el registro nuevo.
 
 La Lambda no guarda un historial de intentos fallidos. Actualiza los campos del último fallo conocido (`MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC`) desde el primer intento fallido. `MOTIVOFALLO` se escribe como texto legible para operaciones, por ejemplo `Documento no coincide con tomador`.
+
+La validación de cédula acepta documentos horizontales, verticales o rotados 90, 180 o 270 grados siempre que la nacionalidad y el número sean legibles. La rotación por sí sola no debe generar fallo; sí se rechaza cuando la imagen está borrosa, recortada, con reflejos, sombras o baja resolución que impida leer el identificador.
 
 ## Endpoints expuestos por Function URL
 
