@@ -6,22 +6,23 @@ export default {
     extend: {
       colors: {
         mercantil: {
-          navy: "#003B71",
-          blue: "#005CA9",
-          sky: "#EAF4FB",
+          navy: "#0F3D6E",
+          blue: "#1D4F8C",
+          sky: "#F6F8FB",
           yellow: "#F4C542",
           orange: "#F28C28",
           success: "#15803D",
-          error: "#C62828",
+          error: "#B91C1C",
           text: "#374151",
           muted: "#6B7280",
-          background: "#F5F7FA",
-          border: "#DDE3EA",
+          background: "#F6F8FB",
+          surface: "#F9FAFB",
+          border: "#E5E7EB",
           white: "#FFFFFF"
         }
       },
       boxShadow: {
-        portal: "0 18px 45px rgba(0, 59, 113, 0.09)"
+        portal: "0 4px 18px rgba(15, 23, 42, 0.06)"
       }
     }
   },

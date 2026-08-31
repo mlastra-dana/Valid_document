@@ -15,7 +15,7 @@ export const ValidationError = ({ result }: ValidationErrorProps) => {
   return (
     <div className="space-y-4" aria-live="assertive">
       <AlertMessage tone="error">
-        <p className="font-bold">{friendly.title}</p>
+        <p className="font-semibold">{friendly.title}</p>
         <p className="mt-1">{friendly.message}</p>
         {maskedDetected ? (
           <p className="mt-2">

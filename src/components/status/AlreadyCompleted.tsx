@@ -13,7 +13,7 @@ export const AlreadyCompleted = ({ expediente }: AlreadyCompletedProps) => (
     message="El documento de identidad asociado a este enlace ya fue recibido y procesado correctamente. No es necesario realizar ninguna acción adicional."
     tone="success"
   >
-    <dl className="grid gap-4 rounded-md bg-green-50 p-4 text-sm sm:grid-cols-2">
+    <dl className="grid gap-4 rounded-md bg-mercantil-surface p-4 text-sm sm:grid-cols-2">
       {expediente.nombreTomador ? (
         <div>
           <dt className="font-semibold text-mercantil-text">Tomador</dt>

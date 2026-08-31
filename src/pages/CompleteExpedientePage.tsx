@@ -63,32 +63,32 @@ const PendingExpediente = ({
     <>
       <ProcessStepper activeStep={2} processing={processing} />
       <section className="mx-auto grid max-w-6xl items-start gap-7 lg:grid-cols-[360px_1fr]">
-        <aside className="rounded-xl border border-[#DDE6F0] bg-white p-6 shadow-[0_22px_60px_rgba(15,23,42,0.06)]">
-          <p className="text-sm font-black uppercase text-mercantil-blue">Datos del expediente</p>
-          <h1 className="mt-3 text-3xl font-black leading-tight text-slate-950">
+        <aside className="rounded-xl border border-mercantil-border bg-white p-6 shadow-portal">
+          <p className="text-sm font-semibold uppercase text-mercantil-blue">Datos del expediente</p>
+          <h1 className="mt-3 text-3xl font-bold leading-tight text-mercantil-navy">
             Cédula de identidad
           </h1>
 
           <dl className="mt-7 space-y-4 text-sm">
             {expediente.nombreTomador ? (
-              <div className="rounded-xl bg-[#F8FAFC] p-4">
-                <dt className="font-black uppercase text-slate-500">Tomador</dt>
-                <dd className="mt-1 text-base font-bold text-slate-950">
+              <div className="rounded-xl bg-mercantil-surface p-4">
+                <dt className="font-semibold uppercase text-mercantil-muted">Tomador</dt>
+                <dd className="mt-1 text-base font-semibold text-mercantil-navy">
                   {expediente.nombreTomador}
                 </dd>
               </div>
             ) : null}
             {expediente.numeroDocumentoEsperado ? (
-              <div className="rounded-xl bg-[#F8FAFC] p-4">
-                <dt className="font-black uppercase text-slate-500">Documento</dt>
-                <dd className="mt-1 text-base font-bold text-slate-950">
+              <div className="rounded-xl bg-mercantil-surface p-4">
+                <dt className="font-semibold uppercase text-mercantil-muted">Documento</dt>
+                <dd className="mt-1 text-base font-semibold text-mercantil-navy">
                   <MaskedDocumentNumber value={expediente.numeroDocumentoEsperado} />
                 </dd>
               </div>
             ) : null}
-            <div className="rounded-xl bg-[#F8FAFC] p-4">
-              <dt className="font-black uppercase text-slate-500">Estado</dt>
-              <dd className="mt-1 text-base font-bold text-mercantil-blue">Pendiente</dd>
+            <div className="rounded-xl bg-mercantil-surface p-4">
+              <dt className="font-semibold uppercase text-mercantil-muted">Estado</dt>
+              <dd className="mt-1 text-base font-semibold text-mercantil-blue">Pendiente</dd>
             </div>
           </dl>
 
@@ -97,13 +97,13 @@ const PendingExpediente = ({
           </div>
         </aside>
 
-        <div className="rounded-xl border border-[#DDE6F0] bg-white p-5 shadow-[0_28px_80px_rgba(15,23,42,0.09)] sm:p-7">
-          <div className="mb-6 border-b border-[#E7ECF3] pb-5">
-            <p className="text-sm font-black uppercase text-mercantil-blue">
+        <div className="rounded-xl border border-mercantil-border bg-white p-5 shadow-portal sm:p-7">
+          <div className="mb-6 border-b border-mercantil-border pb-5">
+            <p className="text-sm font-semibold uppercase text-mercantil-blue">
               Adjuntar documento
             </p>
-            <h2 className="mt-2 text-3xl font-black text-slate-950">Carga el archivo</h2>
-            <p className="mt-3 leading-7 text-slate-600">
+            <h2 className="mt-2 text-3xl font-bold text-mercantil-navy">Carga el archivo</h2>
+            <p className="mt-3 leading-7 text-mercantil-muted">
               Selecciona una imagen o PDF legible.
             </p>
           </div>
@@ -124,7 +124,7 @@ const PendingExpediente = ({
 
             {validation.status === "service-error" ? (
               <AlertMessage tone="error">
-                <p className="font-bold">{mapApiError(validation.error).title}</p>
+                <p className="font-semibold">{mapApiError(validation.error).title}</p>
                 <p className="mt-1">{mapApiError(validation.error).message}</p>
               </AlertMessage>
             ) : null}
@@ -141,9 +141,9 @@ const PendingExpediente = ({
             ) : null}
 
             <div className="grid gap-4">
-              <div className="rounded-xl border border-[#E7ECF3] bg-white p-5">
-                <h2 className="font-black text-mercantil-navy">Recomendaciones</h2>
-                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600">
+              <div className="rounded-xl border border-mercantil-border bg-white p-5">
+                <h2 className="font-semibold text-mercantil-navy">Recomendaciones</h2>
+                <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-mercantil-muted">
                   {recommendations.map((item) => (
                     <li key={item}>{item}</li>
                   ))}

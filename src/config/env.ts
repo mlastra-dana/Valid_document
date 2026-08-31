@@ -24,7 +24,7 @@ export const env: AppEnv = {
   useMockApi: readBoolean(import.meta.env.VITE_USE_MOCK_API, false),
   appName:
     import.meta.env.VITE_APP_NAME?.trim() ||
-    "Portal de Consignación de Documento de Identidad",
+    "Portal Validoc",
   maxFileSizeMb: readPositiveNumber(import.meta.env.VITE_MAX_FILE_SIZE_MB, 10),
   requestTimeoutMs: readPositiveNumber(import.meta.env.VITE_REQUEST_TIMEOUT_MS, 30000)
 };

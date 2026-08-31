@@ -178,7 +178,7 @@ export const DocumentUploader = ({
   return (
     <div className="space-y-5">
       {!selected && cameraActive ? (
-        <div className="rounded-lg border border-[#DDE6F0] bg-white p-3">
+        <div className="rounded-lg border border-mercantil-border bg-white p-3">
           <div className="overflow-hidden rounded-md bg-slate-950">
             <video
               ref={videoRef}
@@ -194,7 +194,7 @@ export const DocumentUploader = ({
               type="button"
               onClick={capturePhoto}
               disabled={disabled || processing || cameraLoading}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-mercantil-blue px-5 py-3 font-bold text-white hover:bg-mercantil-navy disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-mercantil-blue px-5 py-3 font-semibold text-white hover:bg-mercantil-navy disabled:opacity-60"
             >
               <Camera className="h-5 w-5" aria-hidden="true" />
               Tomar foto
@@ -204,7 +204,7 @@ export const DocumentUploader = ({
                 type="button"
                 onClick={() => void switchCamera()}
                 disabled={disabled || processing || cameraLoading}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-[#DDE6F0] px-4 py-3 font-bold text-mercantil-navy hover:border-mercantil-blue hover:text-mercantil-blue disabled:opacity-60 sm:flex-none"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-md border border-mercantil-border px-4 py-3 font-semibold text-mercantil-navy hover:border-mercantil-blue hover:text-mercantil-blue disabled:opacity-60 sm:flex-none"
               >
                 <RefreshCw className="h-5 w-5" aria-hidden="true" />
                 Girar cámara
@@ -212,7 +212,7 @@ export const DocumentUploader = ({
               <button
                 type="button"
                 onClick={stopCamera}
-                className="inline-flex flex-1 items-center justify-center rounded-md border border-[#DDE6F0] px-4 py-3 font-bold text-slate-600 hover:border-mercantil-blue hover:text-mercantil-blue sm:flex-none"
+                className="inline-flex flex-1 items-center justify-center rounded-md border border-mercantil-border px-4 py-3 font-semibold text-mercantil-muted hover:border-mercantil-blue hover:text-mercantil-blue sm:flex-none"
               >
                 Cerrar
               </button>
@@ -248,22 +248,22 @@ export const DocumentUploader = ({
           className={`flex min-h-48 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-5 text-center transition ${
             dragActive
               ? "border-mercantil-blue bg-mercantil-sky"
-              : "border-[#DDE6F0] bg-white"
-          } ${disabled || processing ? "cursor-not-allowed opacity-60" : "hover:border-mercantil-blue hover:bg-[#F6FBFF]"}`}
+              : "border-mercantil-border bg-white"
+          } ${disabled || processing ? "cursor-not-allowed opacity-60" : "hover:border-mercantil-blue hover:bg-mercantil-sky"}`}
           >
-          <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#EEF7FD]">
+          <span className="flex h-12 w-12 items-center justify-center rounded-lg bg-mercantil-sky">
             <UploadCloud className="h-7 w-7 text-mercantil-blue" aria-hidden="true" />
           </span>
-          <p className="mt-4 text-lg font-black text-slate-950">
+          <p className="mt-4 text-lg font-semibold text-mercantil-navy">
             Arrastra el archivo aquí
           </p>
-          <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
+          <p className="mt-1 max-w-sm text-sm leading-6 text-mercantil-muted">
             PDF, JPG o PNG.
           </p>
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <label
               htmlFor={inputId}
-              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-mercantil-blue px-5 py-3 font-bold text-white shadow-sm hover:bg-mercantil-navy"
+              className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-md bg-mercantil-blue px-5 py-3 font-semibold text-white shadow-sm hover:bg-mercantil-navy"
               onClick={(event) => event.stopPropagation()}
             >
               <UploadCloud className="h-5 w-5" aria-hidden="true" />
@@ -277,7 +277,7 @@ export const DocumentUploader = ({
                   void startCamera();
                 }}
                 disabled={disabled || processing || cameraLoading}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-[#DDE6F0] px-5 py-3 font-bold text-mercantil-navy hover:border-mercantil-blue hover:text-mercantil-blue disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-mercantil-border px-5 py-3 font-semibold text-mercantil-navy hover:border-mercantil-blue hover:text-mercantil-blue disabled:opacity-60"
               >
                 <Camera className="h-5 w-5" aria-hidden="true" />
                 Tomar foto

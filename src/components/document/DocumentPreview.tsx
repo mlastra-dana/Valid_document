@@ -19,7 +19,7 @@ export const DocumentPreview = ({ selected, disabled = false, onRemove }: Docume
           type="button"
           onClick={onRemove}
           disabled={disabled}
-          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-[#DDE6F0] bg-white text-slate-500 shadow-sm hover:border-mercantil-blue hover:text-mercantil-blue disabled:opacity-60"
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-mercantil-border bg-white text-mercantil-muted shadow-sm hover:border-mercantil-blue hover:text-mercantil-blue disabled:opacity-60"
           aria-label="Eliminar documento seleccionado"
           title="Eliminar documento"
         >

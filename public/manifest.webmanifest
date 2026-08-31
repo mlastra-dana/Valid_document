@@ -1,12 +1,12 @@
 {
   "name": "Portal Validoc Mercantil",
   "short_name": "Validoc",
-  "description": "Portal de consignacion de documento de identidad para expedientes Mercantil Seguros.",
+  "description": "Portal Validoc para expedientes Mercantil Seguros.",
   "start_url": "/completar-expediente",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0067B1",
+  "background_color": "#F6F8FB",
+  "theme_color": "#1D4F8C",
   "orientation": "portrait-primary",
   "icons": [
     {

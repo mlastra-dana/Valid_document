@@ -6,7 +6,7 @@ import { NotFoundPage } from "../pages/NotFoundPage";
 import { ResultPage } from "../pages/ResultPage";
 
 export const AppRouter = () => (
-  <div className="flex min-h-screen flex-col bg-white">
+  <div className="flex min-h-screen flex-col bg-mercantil-background text-mercantil-text">
     <AppHeader />
     <Routes>
       <Route path="/" element={<CompleteExpedientePage />} />

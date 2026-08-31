@@ -9,9 +9,9 @@ interface AlertMessageProps {
 export const AlertMessage = ({ tone = "info", children }: AlertMessageProps) => {
   const styles = {
     info: "border-mercantil-blue/25 bg-mercantil-sky text-mercantil-navy",
-    warning: "border-mercantil-orange/35 bg-orange-50 text-amber-900",
-    error: "border-mercantil-error/30 bg-red-50 text-mercantil-error",
-    success: "border-mercantil-success/30 bg-green-50 text-mercantil-success"
+    warning: "border-mercantil-orange/35 bg-mercantil-surface text-amber-900",
+    error: "border-mercantil-error/30 bg-white text-mercantil-error",
+    success: "border-mercantil-success/30 bg-mercantil-surface text-mercantil-success"
   };
   const Icon = tone === "success" ? CheckCircle2 : tone === "info" ? Info : AlertTriangle;
 
