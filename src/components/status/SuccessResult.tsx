@@ -21,10 +21,6 @@ export const SuccessResult = ({ result }: SuccessResultProps) => (
         <dt className="font-semibold text-mercantil-text">Fecha de completado</dt>
         <dd className="mt-1 text-mercantil-muted">{formatDateTime(result.completedAt)}</dd>
       </div>
-      <div>
-        <dt className="font-semibold text-mercantil-text">Referencia</dt>
-        <dd className="mt-1 text-mercantil-muted">{result.documentId}</dd>
-      </div>
     </dl>
     <p className="mt-4 text-sm text-mercantil-muted">No se requieren más acciones.</p>
   </StatusCard>

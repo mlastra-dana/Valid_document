@@ -51,3 +51,11 @@ Guardar la ficha estándar del registro de DANA que completó primero:
 6. Probar dos `UID` del mismo `TOMADOR_ID`: el primero completa, el segundo muestra completado y recibe la ruta en su fila DANA.
 
 Este documento registra la tabla creada por la usuaria y la integración local. El comportamiento desplegado no cambia hasta configurar las variables y publicar la Lambda.
+
+## Prueba desplegada del 22 de octubre de 2026
+
+La usuaria abrió el enlace de una fila de prueba ya completada. El export de DynamoDB `results.csv` confirma un ítem con clave `TEST#` para ese `TOMADOR_ID`, `ESTADO_VALIDOC=COMPLETED` y `ADJUNTADOC1` con la referencia del archivo. Esto verifica la carga retrospectiva al abrir ese enlace. `UID` quedó vacío en el ítem; comprobar si Data Retrieval entrega ese campo y cómo viene estructurado antes de dar por cerrada la trazabilidad.
+
+Después abrió el enlace de una fila nueva con otro `UID` y el mismo `TOMADOR_ID`: el portal mostró «Tu expediente ya fue completado» y el ítem original de DynamoDB no cambió. La usuaria confirmó que esa fila DANA recibió `ESTADO_VALIDOC=COMPLETED` y la misma referencia `ADJUNTADOC1`; la captura deja visible el estado. Esta prueba confirma la lectura del completado global, el bloqueo de una segunda carga y la actualización de la fila duplicada al abrir su enlace. Pendiente: completar por primera vez una fila nueva y verificar que ese flujo escriba directamente en DynamoDB; también aclarar por qué `UID` queda vacío en el ítem retrospectivo.
+
+En la prueba siguiente, el portal mostró «Documento recibido exitosamente» para una fila nueva y la lista DANA mostró `ESTADO_VALIDOC=COMPLETED` con ruta de archivo. Falta verificar el ítem correspondiente en DynamoDB para cerrar la prueba de escritura tras una carga nueva. La pantalla de éxito mostraba la ruta interna bajo «Referencia»; se retiró esa sección del frontend local para el próximo despliegue.
