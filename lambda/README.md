@@ -30,7 +30,7 @@ Python 3.12
 
 1. El frontend llama la Function URL con `Authorization: Bearer <dataId-del-enlace>`. La Lambda exige que el Bearer coincida con el `dataId` solicitado y comprueba el registro mediante Data Retrieval.
 2. La Lambda consulta el expediente en DANAconnect usando Data Retrieval.
-3. La Lambda conserva `UID` como `recordUid` de trazabilidad del registro.
+3. La Lambda conserva como `recordUid` el UID de la fila solo si DANA lo devuelve en Data Retrieval. En la prueba del 22 de octubre de 2026, DANA omitió `UID` incluso cuando se solicitó; la trazabilidad por UID sigue pendiente de una fuente comprobada.
 4. La Lambda recibe la cédula en Base64 y valida tipo/tamaño.
 5. La Lambda invoca Bedrock Sonnet para leer el documento usando el `TOMADOR_ID` ya obtenido del expediente.
 6. La Lambda toma el consumo de tokens de la respuesta de Bedrock.
@@ -52,7 +52,7 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_OAUTH_SCOPE=
-DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID
+DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID,UID_VALIDOC
 VALIDOC_TABLE_NAME=ms-validoc-prod
 VALIDOC_STAGE=TEST
 DANA_FIELDS_QUERY_PARAM=fieldList
@@ -74,6 +74,8 @@ Para Data Retrieval hay dos caminos:
 - Si no configuras usuario/password, se usa compatibilidad v2: `GET /api/2.0/rest/conversation/data/{dana}?{DANA_FIELDS_QUERY_PARAM}=...` con bearer token.
 
 `DANA_DATA_FIELDS` controla los campos leídos desde `POC_VALIDOC`. Si agregas un campo de solo lectura, puedes actualizar esta variable sin tocar código. `TOMADOR_ID_COMPLETADO` se mantiene temporalmente para compatibilidad con la LC de prueba; la nueva LC no lo necesita porque el bloqueo global consulta DynamoDB.
+
+Para registrar el UID real de la fila en DynamoDB, la Lambda también acepta `UID_VALIDOC` dentro de `record`. En la LC de prueba, el Update con expresión `idRow` escribió `UID_VALIDOC=1` en la fila `UID=1` y `UID_VALIDOC=17` en la fila `UID=17`. Debe ejecutarse antes del correo para que el portal pueda leerlo. Incluir `UID_VALIDOC` en la variable de entorno `DANA_DATA_FIELDS` desplegada y verificar en CloudWatch que `data_retrieval_uid` indique `source=record` y `present=true`. No sustituir el UID por `requestID` ni por el parámetro `dana`.
 
 Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
 

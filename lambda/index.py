@@ -46,7 +46,7 @@ DANA_DATA_FIELDS = os.environ.get(
     (
         "ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,"
         "FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,"
-        "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID"
+        "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID,UID_VALIDOC"
     ),
 )
 DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
@@ -835,12 +835,18 @@ def retrieve_tomador(tomador_id, portal_token):
         "IDENTIFICACION",
         "CI",
     )
-    record_uid = get_first_value(data, "UID", "uid", "idrow", "IDROW")
+    uid_keys = ("UID", "uid", "idrow", "IDROW", "rowId", "recordUID", "UID_VALIDOC")
+    record_uid = get_first_value(data, *uid_keys)
+    uid_source = "record" if record_uid is not None else ""
+    if record_uid is None:
+        record_uid = get_first_value(body, *uid_keys)
+        uid_source = "response" if record_uid is not None else "missing"
+    log_event("data_retrieval_uid", source=uid_source, present=record_uid is not None)
 
     expediente = {
         "tomadorId": expected_tomador_id,
         "dataId": tomador_id,
-        "recordUid": str(record_uid or ""),
+        "recordUid": str(record_uid) if record_uid is not None else "",
         "nombreTomador": get_first_value(
             data,
             "nombreTomador",

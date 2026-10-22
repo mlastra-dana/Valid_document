@@ -18,7 +18,8 @@ Propuesta acordada para la lista de producción. Conservar exactamente estos có
 | `DOCUMENTO_DETECTADO` | Identificador leído del documento. |
 | `NOMBRE_ARCHIVO_DOC` | Nombre del archivo recibido. |
 | `REINTENTO_VALIDOC` | Nueva autorización de una ronda adicional: vacío, `PENDIENTE` o `CONSUMIDO`. El flujo pone `PENDIENTE`; el portal lo consume una sola vez al reiniciar el contador. Requiere implementación en la Lambda. |
+| `UID_VALIDOC` | Copia del UID real de esta fila, escrita por el Update de DANA con la expresión `idRow`. En la LC de prueba coinciden `UID=1` con `UID_VALIDOC=1` y `UID=17` con `UID_VALIDOC=17`. No viene del TXT. |
 
-`UID` lo genera DANA y debe venir en Data Retrieval; no se incluye como campo del TXT. `TOMADOR_ID_COMPLETADO` se usó en la prueba manual y **no** se crea en esta lista: la consulta global se hará en DynamoDB.
+`UID` lo genera DANA y no se incluye en el TXT. En la prueba del 22 de octubre de 2026, Data Retrieval **no devolvió** ese UID aunque la Lambda lo solicitó; únicamente devolvió los campos de negocio del registro y un `requestID` que identifica la solicitud, no la fila. La captura de la LC comprueba que el Update sí puede copiar el UID a `UID_VALIDOC` en dos filas. Falta comprobar que Data Retrieval devuelva `UID_VALIDOC` antes de cerrar la trazabilidad de extremo a extremo. `TOMADOR_ID_COMPLETADO` se usó en la prueba manual y **no** se crea en esta lista: la consulta global se hará en DynamoDB.
 
-Antes de activar la nueva LC, ajustar la configuración `DANA_DATA_FIELDS` para incluir `REINTENTO_VALIDOC` y excluir `TOMADOR_ID_COMPLETADO`, comprobar que Data Retrieval devuelve estos códigos y mapear los campos que escribe el External Trigger a la nueva lista. Crear la lista no activa por sí solo la lógica de DynamoDB o de reintentos.
+Antes de activar la nueva LC, ajustar la configuración `DANA_DATA_FIELDS` para incluir `REINTENTO_VALIDOC` y `UID_VALIDOC`, excluir `TOMADOR_ID_COMPLETADO`, comprobar que Data Retrieval devuelve estos códigos y mapear los campos que escribe el External Trigger a la nueva lista. Crear la lista no activa por sí solo la lógica de DynamoDB o de reintentos.

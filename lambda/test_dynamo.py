@@ -77,6 +77,36 @@ class DynamoTests(unittest.TestCase):
         self.assertEqual(self.table.items["TEST#V2457722"]["ADJUNTADOC1"], "s3://WS/original")
         self.assertEqual(update.call_args.args[1]["ESTADO_VALIDOC"], "COMPLETED")
 
+    def test_uid_at_response_root_is_saved_when_record_is_nested(self):
+        body = {"UID": 7, "record": {
+            "TOMADOR_ID": "V-2457722", "ESTADO_VALIDOC": "COMPLETED",
+            "ADJUNTADOC1": "s3://WS/original",
+        }}
+        with patch.object(app, "get_json", return_value=body), patch.object(app, "update_dana_record"):
+            expediente = app.retrieve_tomador("dana-original", "dana-original")
+        self.assertEqual(expediente["recordUid"], "7")
+        self.assertEqual(self.table.items["TEST#V2457722"]["UID"], "7")
+
+    def test_uid_validoc_field_is_saved_as_original_uid(self):
+        body = {"record": {
+            "TOMADOR_ID": "V-2457722", "UID_VALIDOC": "7",
+            "ESTADO_VALIDOC": "COMPLETED", "ADJUNTADOC1": "s3://WS/original",
+        }}
+        with patch.object(app, "get_json", return_value=body), patch.object(app, "update_dana_record"):
+            expediente = app.retrieve_tomador("dana-original", "dana-original")
+        self.assertEqual(expediente["recordUid"], "7")
+        self.assertEqual(self.table.items["TEST#V2457722"]["UID"], "7")
+
+    def test_missing_uid_is_not_inferred_from_request_id_or_dana_token(self):
+        body = {"record": {
+            "TOMADOR_ID": "V-2457722", "ESTADO_VALIDOC": "COMPLETED",
+            "ADJUNTADOC1": "s3://WS/original",
+        }, "requestID": "request-123"}
+        with patch.object(app, "get_json", return_value=body), patch.object(app, "update_dana_record"):
+            expediente = app.retrieve_tomador("dana-original", "dana-original")
+        self.assertEqual(expediente["recordUid"], "")
+        self.assertEqual(self.table.items["TEST#V2457722"]["UID"], "")
+
     def test_completed_item_cannot_replace_original(self):
         expediente = {"tomadorId": "V-2457722", "recordUid": "1", "intentosRealizados": 1}
         app.save_completed_item(expediente, "s3://WS/original", "2026-10-21T16:00:00Z")
