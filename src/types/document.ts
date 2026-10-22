@@ -43,6 +43,7 @@ export interface DocumentValidationResponse {
   success: boolean;
   validation: ValidationResult;
   attempts: AttemptStatus;
+  validationProof?: string;
 }
 
 export interface DocumentRegistrationPayload {
@@ -51,6 +52,7 @@ export interface DocumentRegistrationPayload {
   recordUid?: string;
   attemptsUsed?: number;
   detectedDocumentNumber: string;
+  validationProof?: string;
   document: EncodedDocument;
 }
 
@@ -71,6 +73,7 @@ export interface FinalFailurePayload {
   recordUid?: string;
   detectedDocumentNumber?: string | null;
   fileName?: string;
+  validationProof?: string;
 }
 
 export interface SelectedDocumentFile {

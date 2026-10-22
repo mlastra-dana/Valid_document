@@ -177,7 +177,8 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
             dataId: expediente.dataId,
             recordUid: expediente.recordUid,
             detectedDocumentNumber: response.validation.detectedDocumentNumber,
-            fileName: selected.file.name
+            fileName: selected.file.name,
+            validationProof: response.validationProof
           });
           if (!isCurrentRun()) return;
 
@@ -197,6 +198,7 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
           recordUid: expediente.recordUid,
           attemptsUsed: response.attempts.used,
           detectedDocumentNumber: response.validation.detectedDocumentNumber ?? "",
+          validationProof: response.validationProof,
           document
         }, abortController.signal);
         if (!isCurrentRun()) return;

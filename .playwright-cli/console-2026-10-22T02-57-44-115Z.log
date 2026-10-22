@@ -1,0 +1,3 @@
+[    1099ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:8765/favicon.ico:0
+[   19265ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://127.0.0.1:8765/api/expedientes/dana-demo-123:0
+[   46521ms] [ERROR] Failed to load resource: the server responded with a status of 403 (Forbidden) @ http://127.0.0.1:8765/api/documentos-identidad/registrar:0

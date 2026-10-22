@@ -1,4 +1,7 @@
 import base64
+import binascii
+import hashlib
+import hmac
 import json
 import mimetypes
 import os
@@ -69,6 +72,10 @@ BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0"
 )
 MAX_FILE_SIZE_BYTES = int(os.environ.get("MAX_FILE_SIZE_BYTES", str(10 * 1024 * 1024)))
+VALIDATION_PROOF_SECRET = os.environ.get("VALIDATION_PROOF_SECRET", "")
+VALIDATION_PROOF_TTL_SECONDS = 300
+VALIDOC_TABLE_NAME = os.environ.get("VALIDOC_TABLE_NAME", "").strip()
+VALIDOC_STAGE = os.environ.get("VALIDOC_STAGE", "").strip().upper()
 
 ALLOWED_CONTENT_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
@@ -151,8 +158,140 @@ def get_bearer_token(event):
     return match.group(1)
 
 
+def require_link_context(portal_token, data_id, payload=None):
+    if not data_id or not hmac.compare_digest(str(portal_token), str(data_id)):
+        raise AppError(403, "INVALID_LINK", "El enlace no corresponde a este expediente.")
+    expediente = retrieve_tomador(data_id, portal_token)
+    if payload:
+        expected = normalize_document_number(expediente.get("tomadorId"))
+        supplied = normalize_document_number(payload.get("tomadorId"))
+        if not expected or supplied != expected:
+            raise AppError(403, "INVALID_REQUEST", "Los datos no corresponden al expediente.")
+        record_uid = str(expediente.get("recordUid") or "")
+        if record_uid and str(payload.get("recordUid") or "") != record_uid:
+            raise AppError(403, "INVALID_REQUEST", "El registro no corresponde al enlace.")
+    return expediente
+
+
+def document_digest(document):
+    try:
+        content = base64.b64decode(document["contentBase64"], validate=True)
+    except (ValueError, KeyError, binascii.Error):
+        raise AppError(400, "INVALID_REQUEST", "El archivo no tiene un formato válido.")
+    return hashlib.sha256(content).hexdigest()
+
+
+def proof_secret():
+    if len(VALIDATION_PROOF_SECRET.encode("utf-8")) < 32:
+        raise AppError(503, "SERVER_ERROR", "La validación no está configurada.")
+    return VALIDATION_PROOF_SECRET.encode("utf-8")
+
+
+def make_validation_proof(data_id, expediente, document, validation, attempts):
+    claims = {
+        "dataId": data_id,
+        "tomadorId": normalize_document_number(expediente["tomadorId"]),
+        "recordUid": expediente.get("recordUid") or "",
+        "documentHash": document_digest(document),
+        "fileName": document["fileName"],
+        "reasonCode": validation["reasonCode"],
+        "detectedDocumentNumber": validation.get("detectedDocumentNumber") or "",
+        "attemptsUsed": attempts["used"],
+        "expiresAt": int(time.time()) + VALIDATION_PROOF_TTL_SECONDS,
+    }
+    body = base64.urlsafe_b64encode(json.dumps(claims, separators=(",", ":")).encode()).rstrip(b"=")
+    signature = hmac.new(proof_secret(), body, hashlib.sha256).digest()
+    return f"{body.decode()}.{base64.urlsafe_b64encode(signature).rstrip(b'=').decode()}"
+
+
+def verify_validation_proof(payload, expediente, expected_valid):
+    proof = str(payload.get("validationProof") or "")
+    if len(proof) > 4096:
+        raise AppError(403, "INVALID_VALIDATION", "La validación del documento no es válida.")
+    try:
+        body, encoded_signature = proof.split(".", 1)
+        signed = body.encode()
+        signature = base64.urlsafe_b64decode(encoded_signature + "=" * (-len(encoded_signature) % 4))
+        claims = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    except (ValueError, TypeError, UnicodeDecodeError, json.JSONDecodeError, binascii.Error):
+        raise AppError(403, "INVALID_VALIDATION", "La validación del documento no es válida.")
+    if not isinstance(claims, dict):
+        raise AppError(403, "INVALID_VALIDATION", "La validación del documento no es válida.")
+    expected_signature = hmac.new(proof_secret(), signed, hashlib.sha256).digest()
+    if not hmac.compare_digest(signature, expected_signature):
+        raise AppError(403, "INVALID_VALIDATION", "La validación del documento no es válida.")
+    data_id = str(payload.get("dataId") or "")
+    if (
+        claims.get("expiresAt", 0) < int(time.time())
+        or claims.get("dataId") != data_id
+        or claims.get("tomadorId") != normalize_document_number(expediente["tomadorId"])
+        or claims.get("recordUid") != (expediente.get("recordUid") or "")
+        or (claims.get("reasonCode") == "VALID_DOCUMENT") != expected_valid
+    ):
+        raise AppError(403, "INVALID_VALIDATION", "La validación no corresponde a este expediente.")
+    if expected_valid:
+        document = payload.get("document") or {}
+        if claims.get("documentHash") != document_digest(document) or claims.get("fileName") != document.get("fileName"):
+            raise AppError(403, "INVALID_VALIDATION", "El archivo no corresponde al validado.")
+    return claims
+
+
 def normalize_document_number(value):
     return re.sub(r"[^A-Za-z0-9]", "", str(value or "")).upper()
+
+
+def dynamo_key(tomador_id):
+    normalized = normalize_document_number(tomador_id)
+    if not normalized or VALIDOC_STAGE not in {"TEST", "PROD"}:
+        raise AppError(503, "DYNAMO_CONFIG_ERROR", "La consulta de expedientes no está configurada.")
+    return f"{VALIDOC_STAGE}#{normalized}"
+
+
+def validoc_table():
+    if not VALIDOC_TABLE_NAME or boto3 is None:
+        raise AppError(503, "DYNAMO_CONFIG_ERROR", "La consulta de expedientes no está configurada.")
+    return boto3.resource("dynamodb").Table(VALIDOC_TABLE_NAME)
+
+
+def get_completed_item(tomador_id):
+    if not VALIDOC_TABLE_NAME:
+        return None
+    try:
+        item = validoc_table().get_item(Key={"TOMADOR_ID_KEY": dynamo_key(tomador_id)}, ConsistentRead=True).get("Item")
+    except AppError:
+        raise
+    except Exception as error:
+        log_event("dynamo_read_failed", errorType=type(error).__name__)
+        raise AppError(503, "DYNAMO_SERVICE_ERROR", "No pudimos consultar el estado del expediente.")
+    return item if item and is_completed_status(item.get("ESTADO_VALIDOC")) else None
+
+
+def save_completed_item(expediente, file_id, completed_at, detected_number="", file_name="", attempts_used=None):
+    if not VALIDOC_TABLE_NAME:
+        return
+    item = {
+        **expediente.get("_danaFields", {}),
+        "TOMADOR_ID_KEY": dynamo_key(expediente["tomadorId"]),
+        "TOMADOR_ID": expediente["tomadorId"],
+        "UID": expediente.get("recordUid", ""),
+        "ESTADO_VALIDOC": "COMPLETED",
+        "FECHAULTIMOVALIDOC": completed_at,
+        "ADJUNTADOC1": file_id,
+        "DOCUMENTO_DETECTADO": detected_number or "",
+        "NOMBRE_ARCHIVO_DOC": file_name or "",
+        "INTENTOS_VALIDOC": expediente.get("intentosRealizados", 0) if attempts_used is None else attempts_used,
+        "MOTIVOFALLO": "",
+    }
+    try:
+        validoc_table().put_item(Item=item, ConditionExpression="attribute_not_exists(TOMADOR_ID_KEY)")
+    except AppError:
+        raise
+    except Exception as error:
+        error_code = getattr(error, "response", {}).get("Error", {}).get("Code", "")
+        if error_code == "ConditionalCheckFailedException":
+            return
+        log_event("dynamo_write_failed", errorType=type(error).__name__)
+        raise AppError(503, "DYNAMO_SERVICE_ERROR", "El documento fue recibido, pero no pudimos confirmar su estado. Vuelve a abrir el enlace.")
 
 
 def mask_document_number(value):
@@ -733,7 +872,34 @@ def retrieve_tomador(tomador_id, portal_token):
             3,
         ),
         "tomadorIdCompletado": tomador_id_completed_flag(data),
+        "_danaFields": {
+            field: str(get_first_value(data, field) or "")
+            for field in ("NOMBRETOMADOR", "CEDULA_TOMADOR", "EMAIL_TOMADOR", "TELEFONO_TOMADOR", "PRODUCTO")
+        },
     }
+    if VALIDOC_TABLE_NAME:
+        file_id = get_first_value(data, "ADJUNTADOC1", "RutaDoc", "CONSIGNADOC", "ConsignaDoc")
+        completed_item = get_completed_item(expected_tomador_id)
+        if not completed_item and file_id:
+            save_completed_item(
+                expediente,
+                str(file_id),
+                str(get_first_value(data, "FECHAULTIMOVALIDOC") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
+                str(get_first_value(data, "DOCUMENTO_DETECTADO") or ""),
+                str(get_first_value(data, "NOMBRE_ARCHIVO_DOC") or ""),
+            )
+            completed_item = get_completed_item(expected_tomador_id)
+        if completed_item:
+            expediente["expedienteCompletado"] = True
+            expediente["fechaCompletado"] = completed_item.get("FECHAULTIMOVALIDOC") or expediente["fechaCompletado"]
+            if completed_item.get("ADJUNTADOC1") and (
+                not file_id or not is_completed_status(get_first_value(data, "ESTADO_VALIDOC"))
+            ):
+                update_dana_record(tomador_id, {
+                    FIELD_STATUS: "COMPLETED",
+                    FIELD_FILE_ID: completed_item["ADJUNTADOC1"],
+                    FIELD_UPDATED_AT: completed_item.get("FECHAULTIMOVALIDOC", ""),
+                }, record_uid)
     log_event(
         "expediente_extracted",
         dataIdPreview=preview_value(tomador_id),
@@ -1040,18 +1206,22 @@ def handle_get_expediente(path, portal_token):
     if not match:
         return None
     tomador_id = urllib.parse.unquote(match.group(1))
-    expediente = retrieve_tomador(tomador_id, portal_token)
-    return response(200, {"success": True, "data": expediente})
+    expediente = require_link_context(portal_token, tomador_id)
+    return response(200, {"success": True, "data": {key: value for key, value in expediente.items() if not key.startswith("_")}})
 
 
 def handle_validate_document(portal_token, payload):
+    proof_secret()
     invalid_response = validate_document_payload(payload)
     if invalid_response:
         return invalid_response
 
     tomador_id = payload["tomadorId"]
     data_id = payload.get("dataId") or tomador_id
-    attempts_before = get_attempts_from_payload(data_id, payload)
+    expediente = require_link_context(portal_token, data_id, payload)
+    if expediente["expedienteCompletado"]:
+        raise AppError(409, "EXPEDIENTE_COMPLETED", "El expediente ya fue completado.")
+    attempts_before = get_attempts(data_id, expediente)
     if attempts_before["remaining"] <= 0:
         return validation_response("MAX_ATTEMPTS_REACHED", attempts=attempts_before, status_code=429)
 
@@ -1063,7 +1233,7 @@ def handle_validate_document(portal_token, payload):
         source="payload",
     )
     try:
-        validation, token_usage = validate_with_bedrock(payload["document"], tomador_id)
+        validation, token_usage = validate_with_bedrock(payload["document"], expediente["tomadorId"])
     except Exception as error:
         log_event(
             "bedrock_validation_failed",
@@ -1098,15 +1268,40 @@ def handle_validate_document(portal_token, payload):
         validation,
         token_usage,
     )
-    attempts = get_attempts_from_payload(data_id, payload, increment=True)
-    return response(200, {"success": True, "validation": validation, "attempts": attempts})
+    attempts = get_attempts(data_id, expediente, increment=True)
+    proof = make_validation_proof(data_id, expediente, payload["document"], validation, attempts)
+    return response(200, {"success": True, "validation": validation, "attempts": attempts, "validationProof": proof})
 
 
 def handle_register_document(portal_token, payload):
     invalid_response = validate_document_payload(payload)
     if invalid_response:
         raise AppError(invalid_response["statusCode"], "VALIDATION_FAILED", "El documento no es válido.")
-    result = upload_document(payload)
+    data_id = payload.get("dataId") or payload["tomadorId"]
+    expediente = require_link_context(portal_token, data_id, payload)
+    if expediente["expedienteCompletado"]:
+        raise AppError(409, "EXPEDIENTE_COMPLETED", "El expediente ya fue completado.")
+    claims = verify_validation_proof(payload, expediente, expected_valid=True)
+    if expediente["intentosRealizados"] >= expediente["maximoIntentos"]:
+        raise AppError(429, "MAX_ATTEMPTS_REACHED", "Máximo de intentos alcanzado.")
+    verified_payload = {
+        **payload,
+        "tomadorId": expediente["tomadorId"],
+        "dataId": data_id,
+        "recordUid": expediente["recordUid"],
+        "attemptsUsed": claims["attemptsUsed"],
+        "detectedDocumentNumber": claims["detectedDocumentNumber"],
+    }
+    result = upload_document(verified_payload)
+    if VALIDOC_TABLE_NAME:
+        save_completed_item(
+            expediente,
+            result["documentId"],
+            result["completedAt"],
+            claims["detectedDocumentNumber"],
+            verified_payload["document"]["fileName"],
+            claims["attemptsUsed"],
+        )
     _ATTEMPTS_CACHE.pop(payload.get("dataId") or payload["tomadorId"], None)
     return response(200, result)
 
@@ -1116,9 +1311,21 @@ def handle_register_failure(path, portal_token, payload):
     if not match:
         return None
     tomador_id = urllib.parse.unquote(match.group(1))
-    data_id = payload.get("dataId") or tomador_id
-    register_result(data_id, payload.get("tomadorId") or tomador_id, payload)
-    _ATTEMPTS_CACHE.pop(data_id, None)
+    expediente = require_link_context(portal_token, tomador_id, payload)
+    if expediente["expedienteCompletado"]:
+        raise AppError(409, "EXPEDIENTE_COMPLETED", "El expediente ya fue completado.")
+    claims = verify_validation_proof(payload, expediente, expected_valid=False)
+    if claims["attemptsUsed"] <= expediente["intentosRealizados"]:
+        raise AppError(409, "STALE_VALIDATION", "Este intento ya fue registrado.")
+    register_result(tomador_id, expediente["tomadorId"], {
+        "reasonCode": claims["reasonCode"],
+        "attemptsUsed": claims["attemptsUsed"],
+        "detectedDocumentNumber": claims["detectedDocumentNumber"],
+        "fileName": claims["fileName"],
+        "status": "VALIDATION_FAILED",
+        "recordUid": expediente["recordUid"],
+    })
+    _ATTEMPTS_CACHE.pop(tomador_id, None)
     return empty_response(204)
 
 

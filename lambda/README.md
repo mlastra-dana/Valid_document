@@ -28,7 +28,7 @@ Python 3.12
 
 ## Flujo
 
-1. El frontend llama la Function URL con `Authorization: Bearer <dataId-del-enlace>`.
+1. El frontend llama la Function URL con `Authorization: Bearer <dataId-del-enlace>`. La Lambda exige que el Bearer coincida con el `dataId` solicitado y comprueba el registro mediante Data Retrieval.
 2. La Lambda consulta el expediente en DANAconnect usando Data Retrieval.
 3. La Lambda conserva `UID` como `recordUid` de trazabilidad del registro.
 4. La Lambda recibe la cédula en Base64 y valida tipo/tamaño.
@@ -53,6 +53,8 @@ DANA_USERNAME=
 DANA_PASSWORD=
 DANA_OAUTH_SCOPE=
 DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID
+VALIDOC_TABLE_NAME=ms-validoc-prod
+VALIDOC_STAGE=TEST
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_CONVERSATION_DEBUG=0
@@ -64,12 +66,14 @@ BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
 MAX_FILE_SIZE_BYTES=10485760
 ```
 
+`VALIDOC_TABLE_NAME` habilita la consulta y escritura de completados en DynamoDB. `VALIDOC_STAGE` debe ser `TEST` durante las pruebas con la LC actual y `PROD` al pasar a producción; forma parte de `TOMADOR_ID_KEY` para separar los registros. Si se configura la tabla y la consulta falla, la Lambda detiene el flujo para evitar una nueva carga sin comprobar duplicados. Antes de activar `PROD`, cargar en DynamoDB los completados históricos; una fila DANA ya completada se registra automáticamente cuando se abre su enlace, pero eso no cubre a quienes no lo abran.
+
 Para Data Retrieval hay dos caminos:
 
 - Si configuras `DANA_USERNAME` y `DANA_PASSWORD`, se usa el camino estable probado: `GET /api/1.0/rest/conversation/data/{dana}?fields=...` con `Authorization: Basic ...`.
 - Si no configuras usuario/password, se usa compatibilidad v2: `GET /api/2.0/rest/conversation/data/{dana}?{DANA_FIELDS_QUERY_PARAM}=...` con bearer token.
 
-`DANA_DATA_FIELDS` controla los campos leídos desde `POC_VALIDOC`. Si agregas un campo de solo lectura, puedes actualizar esta variable sin tocar código. Para la regla global por cliente, debe incluir `TOMADOR_ID_COMPLETADO` o un alias soportado.
+`DANA_DATA_FIELDS` controla los campos leídos desde `POC_VALIDOC`. Si agregas un campo de solo lectura, puedes actualizar esta variable sin tocar código. `TOMADOR_ID_COMPLETADO` se mantiene temporalmente para compatibilidad con la LC de prueba; la nueva LC no lo necesita porque el bloqueo global consulta DynamoDB.
 
 Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
 
@@ -93,11 +97,11 @@ POST /event/Trigger?dana={dataId}&CAMPO=valor
 
 `TOMADOR_ID` no se usa como llave de actualización. Si Data Retrieval entrega `UID`, la Lambda lo transporta como `recordUid` y lo escribe en logs para verificar que el intento y la actualización pertenecen a la misma fila DANA.
 
-La carga se bloquea si el registro actual está completado o si DANA informa que el mismo `TOMADOR_ID` ya fue completado en otro `UID` mediante `TOMADOR_ID_COMPLETADO=1`, `SI` o `true`. Data Retrieval no busca por sí solo en toda la lista; este indicador debe venir desde DANA o desde un endpoint de búsqueda adicional si se incorpora más adelante.
+La carga se bloquea si el registro actual está completado o si DynamoDB contiene un ítem `COMPLETED` para el mismo `TOMADOR_ID_KEY`. Si se abre un enlace de otra fila del mismo tomador, la Lambda escribe en esa fila `ESTADO_VALIDOC=COMPLETED` y copia `ADJUNTADOC1` desde DynamoDB. `TOMADOR_ID_COMPLETADO` sigue siendo un control legado de la LC de prueba.
 
 Cuando Data Retrieval entrega `ESTADO_VALIDOC=COMPLETED`, el endpoint `GET /expedientes/{dataId}` responde `expedienteCompletado=true` y el frontend va directo a la pantalla de completado. La Lambda acepta el valor aunque venga como campo directo, dentro de `record`, dentro de `fields` o como objeto con `value`.
 
-Si DANA crea un registro nuevo limpio con un `TOMADOR_ID` que ya fue completado en otro `UID`, la Lambda no puede inferirlo desde Data Retrieval. En ese caso el portal lo tratará como pendiente. Por eso DANA debe validar el `TOMADOR_ID` antes de enviar el correo o llenar `TOMADOR_ID_COMPLETADO` en el registro nuevo.
+Si DANA crea un registro nuevo limpio con un `TOMADOR_ID` ya completado, la consulta a DynamoDB lo detecta al abrir el enlace. La prevención del correo inicial duplicado sigue siendo responsabilidad del proceso que inyecta o selecciona destinatarios; la Lambda actúa cuando se abre el enlace.
 
 La Lambda no guarda un historial de intentos fallidos. Actualiza los campos del último fallo conocido (`MOTIVOFALLO`, `ESTADO_VALIDOC`, `INTENTOS_VALIDOC`, `DOCUMENTO_DETECTADO`, `NOMBRE_ARCHIVO_DOC`) desde el primer intento fallido. `MOTIVOFALLO` se escribe como texto legible para operaciones, por ejemplo `Documento no coincide con tomador`.
 
@@ -117,6 +121,10 @@ Todos requieren:
 ```http
 Authorization: Bearer <token-del-enlace>
 ```
+
+`POST /documentos-identidad/validar` devuelve `validationProof` cuando Bedrock termina. La prueba firmada dura cinco minutos y vincula el `dataId`, el `UID`, el resultado y el hash del archivo. El frontend la envía a `/registrar` o a `/resultado` según corresponda. Una petición directa sin prueba válida no puede registrar un archivo ni un resultado.
+
+Configura `VALIDATION_PROOF_SECRET` en la Lambda con un valor aleatorio de al menos 32 bytes antes de desplegar esta versión. La validación falla cerrada si falta. Para evitar interrumpir la carga: despliega primero el frontend que envía `validationProof`, después configura el secreto y despliega la Lambda. El frontend nuevo sigue funcionando temporalmente con la Lambda anterior porque el campo es adicional.
 
 ## Empaquetado desde la raíz del repo
 
