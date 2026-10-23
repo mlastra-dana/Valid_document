@@ -1,28 +1,28 @@
-# Portal de Consignación de Documento de Identidad
+# Portal Validoc de Mercantil Seguros
 
 Aplicación web React para que clientes o asesores de Mercantil Seguros completen un expediente digital iniciado desde una comunicación enviada por DANAconnect.
 
 ## Objetivo
 
-El portal recibe el `dataId` entregado por DANAconnect desde un enlace único, consulta el expediente en `POC_VALIDOC`, permite cargar una cédula venezolana, valida el documento mediante Bedrock Sonnet, sube el archivo aprobado con File Upload API y actualiza el mismo registro DANA. El POC no implementa autenticación propia; usa el enlace generado por DANA como entrada del flujo.
+El portal recibe el parámetro `dana` de un enlace enviado por DANAconnect, consulta el expediente en la lista de contactos, permite cargar una cédula venezolana, valida el documento mediante Bedrock Sonnet, sube el archivo aprobado con File Upload API y actualiza el mismo registro DANA. DynamoDB conserva una entrada por tomador completado para impedir otra carga desde un registro duplicado. El portal no implementa autenticación propia: quien tenga el enlace válido puede abrirlo desde otro navegador.
 
-## Estado del POC
+## Estado del portal
 
-El demo se considera estable para presentación con este alcance:
+El flujo siguiente se probó con la lista DANA de pruebas. El paso a producción y las decisiones pendientes están en el [documento de seguimiento](docs/validoc-handoff-summary.md).
 
 - Consulta de expediente desde DANA Data Retrieval usando el `dataId` del enlace.
 - Obtención de `TOMADOR_ID` desde el registro DANA.
 - Trazabilidad del `UID` único de la fila DANA como `recordUid`.
 - Validación de cédula venezolana por nacionalidad y número exactos contra `TOMADOR_ID`.
 - Carga de PDF, JPG, JPEG o PNG, con normalización backend del tipo real del archivo.
-- Tres intentos máximos por enlace/correo.
+- Límite actual de tres intentos por registro/enlace; la regla para conceder intentos nuevos tras un recordatorio está pendiente de decisión con el cliente.
 - Registro del último fallo conocido en DANA con motivo legible para operaciones.
 - File Upload a DANA solo cuando Bedrock valida correctamente el documento.
 - Actualización del mismo registro DANA mediante Trigger.
 - Bloqueo de nueva carga cuando `ESTADO_VALIDOC = COMPLETED` o `ADJUNTADOC1` ya tiene fileID.
-- Bloqueo de carga cuando DANA indique que ese `TOMADOR_ID` ya tiene un expediente completado, aunque el enlace pertenezca a otro `UID`.
+- Bloqueo de carga cuando DynamoDB ya tiene un expediente completado para ese `TOMADOR_ID`, aunque el enlace pertenezca a otro `UID`.
 
-Fuera de alcance para este POC:
+Fuera de alcance del flujo actual:
 
 - Validación de nombres y apellidos.
 - Historial completo de intentos fallidos.
@@ -32,14 +32,14 @@ Fuera de alcance para este POC:
 ## Flujo funcional
 
 1. DANAconnect envía el correo inicial con el enlace de acceso.
-2. El frontend recibe el `dataId` entregado por el external trigger de DANA.
-3. La Lambda consulta Data Retrieval y obtiene `TOMADOR_ID`, `UID`, nombre, cédula informativa y estado.
-4. Si el registro actual ya está completado, o DANA indica que el `TOMADOR_ID` ya fue completado en otro `UID`, el portal muestra cierre y no permite carga.
-5. El usuario carga PDF, JPG, JPEG o PNG de máximo 10 MB, o toma una foto desde cámara cuando el dispositivo lo permite.
+2. El frontend recibe `?dana=...` del enlace y envía ese valor a la Lambda en la ruta y como `Authorization: Bearer`. Abrir el portal no registra por sí solo un evento en el flujo DANA.
+3. La Lambda consulta Data Retrieval para obtener `TOMADOR_ID`, nombre, cédula informativa, estado y `UID_VALIDOC`. DANA no devolvió `UID` ni `idrow` directamente en las pruebas: un nodo Update previo al correo copia `idRow` a `UID_VALIDOC`.
+4. La Lambda consulta `ms-validoc-prod` con la clave `VALIDOC_STAGE#TOMADOR_ID_NORMALIZADO`. Si el registro actual o el tomador ya están completados, el portal muestra cierre y no permite otra carga. Para una fila duplicada, copia a DANA el estado `COMPLETED` y la referencia original del documento.
+5. El usuario carga PDF, JPG, JPEG o PNG de máximo 3 MB, o toma una foto desde cámara cuando el dispositivo lo permite. El portal rechaza un archivo mayor antes de enviarlo y no consume un intento.
 6. El frontend envía el archivo en Base64 sin prefijo Data URL.
 7. Bedrock Sonnet valida legibilidad, tipo de documento y documento detectado.
 8. El backend compara nacionalidad más número contra `TOMADOR_ID`.
-9. En éxito, el backend sube el archivo con File Upload API y actualiza DANAconnect.
+9. En éxito, el backend sube el archivo con File Upload API, actualiza DANAconnect mediante External Trigger y guarda en DynamoDB el completado, el UID de origen y la referencia del archivo. Una escritura condicional preserva el primer completado.
 10. En fallo, el backend actualiza el último motivo conocido y los intentos usados de ese correo para que DANA pueda continuar con refuerzo o seguimiento.
 
 ## Tecnologías
@@ -52,9 +52,19 @@ Fuera de alcance para este POC:
 - lucide-react
 - ESLint y Prettier
 - AWS Lambda Function URL
+- Amazon DynamoDB (`ms-validoc-prod`)
 - Amazon Bedrock con modelo Sonnet
 - APIs Data Retrieval y Upload de DANAconnect
 - PWA instalable con manifest y service worker
+
+## Función Lambda y ambientes
+
+- **Código backend:** `lambda/index.py`; handler `index.lambda_handler`. La función de pruebas utilizada hasta ahora aparece como `Valid_document` en la consola compartida. Confirmar el nombre exacto en AWS antes de crear o cambiar recursos.
+- **Tabla:** `ms-validoc-prod`, clave `TOMADOR_ID_KEY`. `VALIDOC_STAGE=TEST` guarda `TEST#...`; `VALIDOC_STAGE=PROD` guarda `PROD#...` en la misma tabla. El valor es una configuración de toda la Lambda: el código no identifica automáticamente el ambiente de cada fila. Cada ítem completado conserva `TOMADOR_ID`, `UID`, `ESTADO_VALIDOC`, `ADJUNTADOC1`, fecha, resultado y datos del expediente; no contiene el archivo binario. Una escritura condicional impide reemplazar el primer completado.
+- **Nombre recomendado para una función real separada:** `ms-validoc-portal-prod`. `ms-prod` sería ambiguo entre proyectos. Conservar `Valid_document` para pruebas evita mezclar ambos flujos mientras se prepara producción. Este nombre es una propuesta; la nueva función no se ha creado.
+- **Paso a producción:** crear la nueva Lambda con el mismo código, configurar su propia Function URL, variables y permisos, y apuntar la compilación del portal real (`VITE_API_BASE_URL`) a esa URL. Probar una carga válida y una fallida en el flujo real antes de enviar correos reales. La URL nueva de la API no cambia por sí sola el dominio del portal que reciben los clientes.
+
+AWS no permite cambiar el nombre de una función Lambda existente en su configuración: para usar otro nombre hay que crear una función nueva. El despliegue y el cambio de `VITE_API_BASE_URL` los realiza la responsable del proyecto. Véase [resumen de implementación y pruebas](docs/validoc-handoff-summary.md).
 
 ## Requisitos
 
@@ -88,7 +98,7 @@ VITE_API_BASE_URL=https://api.example.com
 VITE_API_URL=
 VITE_USE_MOCK_API=false
 VITE_APP_NAME=Portal de Consignación de Documento de Identidad
-VITE_MAX_FILE_SIZE_MB=10
+VITE_MAX_FILE_SIZE_MB=3
 VITE_REQUEST_TIMEOUT_MS=30000
 ```
 
@@ -197,32 +207,33 @@ Content-Type: application/json
 
 ## Seguridad
 
-- El token se conserva solo en memoria durante la sesión.
+- El token `dana` viene en el enlace y se envía a la Lambda en `Authorization: Bearer`. El enlace debe tratarse como una credencial y no compartirse; los logs nuevos ocultan su valor en las rutas.
 - El documento no se guarda en `localStorage` ni `sessionStorage`.
 - El Base64 no se imprime en consola ni se coloca en rutas.
 - Los números de documento se muestran parcialmente ocultos.
 - El frontend valida tipo, extensión y tamaño, pero el backend debe validar de nuevo.
 - El frontend no debe conectarse directamente a DynamoDB, S3, Bedrock ni DANAconnect usando credenciales.
-- Las integraciones deben realizarse mediante API Gateway y Lambda u otro backend controlado.
+- Las integraciones se realizan desde la Lambda mediante su Function URL; el navegador no recibe credenciales de DANA ni de AWS.
 
 ## Backend Lambda
 
-El backend vive en [lambda/index.py](/Users/marialastra/Documents/Valid_document/lambda/index.py) y está documentado en [lambda/README.md](/Users/marialastra/Documents/Valid_document/lambda/README.md).
+El backend vive en [lambda/index.py](lambda/index.py) y está documentado en [lambda/README.md](lambda/README.md).
 
 Responsabilidades:
 
 - Recibir las rutas REST consumidas por el frontend.
-- Usar el API Data Retrieval de DANAconnect para consultar el tomador.
+- Usar Data Retrieval de DANAconnect para consultar el tomador y su `UID_VALIDOC`.
+- Consultar DynamoDB por `TOMADOR_ID` normalizado y guardar el primer expediente completado con su referencia documental.
 - Invocar Amazon Bedrock Sonnet para validar legibilidad, tipo de documento y número detectado.
 - Registrar tokens de Bedrock en una lista DANA separada mediante Start Conversation por ProjectID, si `DANA_TOKEN_AUDIT_PROJECT_ID` está configurado.
 - Comparar el número detectado contra el esperado del tomador.
 - Usar File Upload API de DANAconnect para subir la cédula validada.
-- Actualizar el mismo registro en DANA con Trigger usando el `dataId` del enlace y registrar el `UID` en logs de trazabilidad.
+- Actualizar el mismo registro en DANA con Trigger usando el `dataId` del enlace y registrar `UID_VALIDOC` como UID de origen.
 
 Variables del backend:
 
 ```env
-CORS_ORIGIN=https://tu-dominio-amplify.com
+CORS_ORIGIN=https://ms.validoc.danaconnect.us
 DANA_BASE_URL=https://appserv.danaconnect.com
 DANA_TRIGGER_URL=https://appserv.danaconnect.com/event/Trigger
 DANA_TOKEN_URL=https://auth.danaconnect.com/oauth2/token
@@ -241,26 +252,23 @@ DANA_TOKEN_AUDIT_FIELDS_JSON=
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
-MAX_FILE_SIZE_BYTES=10485760
+MAX_FILE_SIZE_BYTES=3145728
 ```
 
 La carpeta `lambda/` es la referencia del código que debe estar dentro de AWS Lambda.
 
 Documentación adicional:
 
-- [Ficha del Demo POC](/Users/marialastra/Documents/Valid_document/docs/demo-poc.md)
-- [Arquitectura](/Users/marialastra/Documents/Valid_document/docs/architecture.md)
-- [Proceso Validoc](/Users/marialastra/Documents/Valid_document/docs/process.md)
-- [Opciones de duplicidad por TOMADOR_ID](/Users/marialastra/Documents/Valid_document/docs/duplicate-tomador-options.md)
-- [Lista DANA de pruebas](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-test-list-fields.md)
-- [Lista DANA de auditoría de tokens](/Users/marialastra/Documents/Valid_document/docs/dana/token-audit-list-fields.md)
-- [Email Validoc](/Users/marialastra/Documents/Valid_document/docs/dana/validoc-email-flow.md)
+- [Estado, decisiones pendientes y salida a producción](docs/validoc-handoff-summary.md)
+- [Campos de la nueva lista DANA](docs/dana/validoc-new-list-fields.md)
+- [Lista DANA de auditoría de tokens](docs/dana/token-audit-list-fields.md)
+- [Plantilla de correo Validoc](docs/dana/validoc-email-flow.md)
 
 ## Integración con DANAconnect
 
-DANAconnect genera el enlace y entrega el `dataId` que permite leer el expediente con Data Retrieval. `TOMADOR_ID` se obtiene desde el registro DANA y se usa como valor esperado para validar la cédula. Si otro `UID` con el mismo `TOMADOR_ID` ya está completado, DANA debe entregar `TOMADOR_ID_COMPLETADO=1` o equivalente para que el portal cierre el flujo sin permitir carga. El portal informa resultados al backend para que DANAconnect continúe el flujo correspondiente.
+DANAconnect genera el enlace y entrega el `dataId` que permite leer una fila mediante Data Retrieval. Un nodo Update previo al correo escribe `idRow` en el campo personalizado `UID_VALIDOC` de esa fila. `TOMADOR_ID` se usa para cotejar la cédula y consultar los completados en DynamoDB; `TOMADOR_ID_COMPLETADO` se conserva solo por compatibilidad con la lista de pruebas.
 
-Si se crea un registro nuevo limpio con el mismo `TOMADOR_ID`, el portal solo verá ese registro por Data Retrieval. Para evitar una nueva validación, DANA debe hacer el control previo por `TOMADOR_ID` antes de enviar el correo o entregar el indicador `TOMADOR_ID_COMPLETADO`.
+Si se abre el enlace de otra fila con el mismo tomador ya completado, la Lambda marca esa fila como `COMPLETED` en DANA y copia la referencia documental original. Si la persona nunca abre ese segundo enlace, el portal no recibe el evento y no puede actualizar esa fila por sí solo. El control de a quién se envían los correos corresponde al flujo de DANA y a la carga de la lista.
 
 ## Integración con Document Manager
 
@@ -361,4 +369,4 @@ Los logos visibles están en `public/icono-mercantil.png` y `public/mercantilseg
 - Si la app consulta el backend real durante desarrollo, revisa `VITE_USE_MOCK_API=true`.
 - Si una ruta directa muestra 404 en Amplify, configura el rewrite SPA.
 - Si el backend rechaza el archivo, confirma que recibe solo el contenido Base64 sin prefijo.
-- Si aparece un error temporal, revisa disponibilidad de API Gateway/Lambda o del servicio de validación.
+- Si aparece un error temporal, revisa la Function URL, los logs de Lambda y la disponibilidad de DANAconnect o Bedrock.

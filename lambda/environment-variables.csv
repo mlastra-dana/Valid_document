@@ -1,5 +1,5 @@
 Variable,Valor sugerido,Requerida,Uso,Descripcion
-CORS_ORIGIN,https://tu-dominio-amplify.com,Si,General,Origen permitido para llamadas desde el frontend Amplify.
+CORS_ORIGIN,https://ms.validoc.danaconnect.us,Si,General,Origen permitido para llamadas desde el portal.
 DANA_BASE_URL,https://appserv.danaconnect.com,Si,DANAconnect,Base URL para Data Retrieval File Upload y Conversation API.
 DANA_TRIGGER_URL,https://appserv.danaconnect.com/event/Trigger,Si,DANAconnect,Endpoint Trigger usado para actualizar el mismo registro recibido por dana/dataId.
 DANA_USERNAME,,Si,DANAconnect Basic Auth,Usuario para Data Retrieval v1 y File Upload API.
@@ -18,7 +18,7 @@ DANA_TOKEN_AUDIT_FIELDS_JSON,"{""lambdaName"":""LAMBDA_NAME"",""modelId"":""MODE
 DANA_TIMEOUT_SECONDS,20,No,DANAconnect,Timeout en segundos para llamadas HTTP a DANAconnect.
 BEDROCK_REGION,us-east-1,Si,Bedrock,Region AWS donde se invoca Bedrock.
 BEDROCK_MODEL_ID,anthropic.claude-3-5-sonnet-20240620-v1:0,Si,Bedrock,Modelo Sonnet usado para validar el documento.
-MAX_FILE_SIZE_BYTES,10485760,Si,Validacion,Tamano maximo permitido para el archivo en bytes.
+MAX_FILE_SIZE_BYTES,3145728,Si,Validacion,Tamano maximo permitido para el archivo en bytes. Debe coincidir con VITE_MAX_FILE_SIZE_MB=3 del frontend.
 VALIDATION_PROOF_SECRET,,Si,Seguridad,Secreto aleatorio de al menos 32 bytes para firmar la prueba de validacion de cada archivo. Configurar antes de desplegar la Lambda nueva.
 VALIDOC_TABLE_NAME,ms-validoc-prod,Si para DynamoDB,DynamoDB,Tabla donde se guardan los expedientes completados.
 VALIDOC_STAGE,TEST,Si para DynamoDB,DynamoDB,Prefijo de la clave TOMADOR_ID_KEY. Usar TEST en pruebas y PROD cuando se active el flujo real.

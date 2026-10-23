@@ -1,6 +1,6 @@
 # Lambda del Portal Validoc
 
-Esta carpeta contiene el código que debe vivir dentro de AWS Lambda para el demo integrado del portal.
+Esta carpeta contiene el backend del Portal Validoc de Mercantil Seguros. La función de pruebas observada en la consola compartida se denomina `Valid_document`; `ms-validoc-portal-prod` es el nombre propuesto para una función de producción separada, aún no creada. El nombre de la función en AWS no cambia el handler del código.
 
 ## Archivo principal
 
@@ -20,29 +20,31 @@ También queda disponible el alias:
 index.handler
 ```
 
-Runtime recomendado:
+Runtime observado en los logs de la función de pruebas:
 
 ```text
-Python 3.12
+Python 3.14
 ```
+
+Al crear la función de producción, comprobar en AWS el runtime y las dependencias de la función de pruebas antes de copiar su configuración.
 
 ## Flujo
 
 1. El frontend llama la Function URL con `Authorization: Bearer <dataId-del-enlace>`. La Lambda exige que el Bearer coincida con el `dataId` solicitado y comprueba el registro mediante Data Retrieval.
 2. La Lambda consulta el expediente en DANAconnect usando Data Retrieval.
-3. La Lambda conserva como `recordUid` el UID de la fila solo si DANA lo devuelve en Data Retrieval. En la prueba del 22 de octubre de 2026, DANA omitió `UID` incluso cuando se solicitó; la trazabilidad por UID sigue pendiente de una fuente comprobada.
+3. El nodo Update de DANA copia `idRow` a `UID_VALIDOC` antes de enviar el correo. Data Retrieval devolvió ese campo en las pruebas y la Lambda lo conserva como `recordUid`; los campos internos `UID` e `idrow` no se devolvieron directamente.
 4. La Lambda recibe la cédula en Base64 y valida tipo/tamaño.
 5. La Lambda invoca Bedrock Sonnet para leer el documento usando el `TOMADOR_ID` ya obtenido del expediente.
 6. La Lambda toma el consumo de tokens de la respuesta de Bedrock.
 7. Si `DANA_TOKEN_AUDIT_PROJECT_ID` está configurado, registra esos tokens en otra lista DANA con Start Conversation por ProjectID.
 8. La Lambda compara la cédula detectada con la esperada por DANA.
 9. Si es válida, sube el documento con el API Upload de DANAconnect.
-10. Si una validación falla, registra el último motivo conocido en DANA para cubrir abandono del cliente.
+10. Si una validación falla, registra el último motivo conocido y el número de intentos en DANA. Si se completa, registra en DynamoDB el tomador, el UID de origen y la referencia documental. Un segundo enlace del mismo tomador se cierra con la referencia original sin otra carga.
 
 ## Variables de entorno
 
 ```env
-CORS_ORIGIN=https://tu-dominio-amplify.com
+CORS_ORIGIN=https://ms.validoc.danaconnect.us
 DANA_BASE_URL=https://appserv.danaconnect.com
 DANA_TRIGGER_URL=https://appserv.danaconnect.com/event/Trigger
 DANA_TOKEN_URL=https://auth.danaconnect.com/oauth2/token
@@ -63,10 +65,10 @@ DANA_TOKEN_AUDIT_FIELDS_JSON=
 DANA_TIMEOUT_SECONDS=20
 BEDROCK_REGION=us-east-1
 BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
-MAX_FILE_SIZE_BYTES=10485760
+MAX_FILE_SIZE_BYTES=3145728
 ```
 
-`VALIDOC_TABLE_NAME` habilita la consulta y escritura de completados en DynamoDB. `VALIDOC_STAGE` debe ser `TEST` durante las pruebas con la LC actual y `PROD` al pasar a producción; forma parte de `TOMADOR_ID_KEY` para separar los registros. Si se configura la tabla y la consulta falla, la Lambda detiene el flujo para evitar una nueva carga sin comprobar duplicados. Antes de activar `PROD`, cargar en DynamoDB los completados históricos; una fila DANA ya completada se registra automáticamente cuando se abre su enlace, pero eso no cubre a quienes no lo abran.
+`VALIDOC_TABLE_NAME` habilita la consulta y escritura de completados en DynamoDB. `VALIDOC_STAGE` debe ser `TEST` en la función de pruebas y `PROD` en la función del flujo real; forma parte de `TOMADOR_ID_KEY` para separar los registros dentro de la misma tabla. Es una variable de toda la función, no una propiedad detectada por cada enlace. Si se configura la tabla y la consulta falla, la Lambda detiene el flujo para evitar una nueva carga sin comprobar duplicados. Como este proceso comienza con la nueva lista, no hay completados históricos que migrar al activar `PROD`.
 
 Para Data Retrieval hay dos caminos:
 
@@ -75,9 +77,9 @@ Para Data Retrieval hay dos caminos:
 
 `DANA_DATA_FIELDS` controla los campos leídos desde `POC_VALIDOC`. Si agregas un campo de solo lectura, puedes actualizar esta variable sin tocar código. `TOMADOR_ID_COMPLETADO` se mantiene temporalmente para compatibilidad con la LC de prueba; la nueva LC no lo necesita porque el bloqueo global consulta DynamoDB.
 
-Para registrar el UID real de la fila en DynamoDB, la Lambda también acepta `UID_VALIDOC` dentro de `record`. En la LC de prueba, el Update con expresión `idRow` escribió `UID_VALIDOC=1` en la fila `UID=1` y `UID_VALIDOC=17` en la fila `UID=17`. Debe ejecutarse antes del correo para que el portal pueda leerlo. Incluir `UID_VALIDOC` en la variable de entorno `DANA_DATA_FIELDS` desplegada y verificar en CloudWatch que `data_retrieval_uid` indique `source=record` y `present=true`. No sustituir el UID por `requestID` ni por el parámetro `dana`.
+Para registrar el UID real de la fila en DynamoDB, la Lambda lee `UID_VALIDOC` dentro de `record`. En la LC de prueba, el Update con expresión `idRow` escribió `UID_VALIDOC=1` en la fila `UID=1` y `UID_VALIDOC=17` en la fila `UID=17`. Se ejecuta antes del correo. Con `UID_VALIDOC` en `DANA_DATA_FIELDS`, CloudWatch mostró `data_retrieval_uid` con `source=record` y `present=true`; la usuaria confirmó un completado nuevo con UID en DynamoDB. No sustituir el UID por `requestID` ni por el parámetro `dana`.
 
-Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para el demo. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
+Puedes usar `DANA_ACCESS_TOKEN` si ya tienes un token técnico fijo para las pruebas. Si prefieres OAuth, configura `DANA_TOKEN_URL` con `DANA_CLIENT_ID` y `DANA_CLIENT_SECRET`. `DANA_OAUTH_AUTH_METHOD=basic` envía el client id/secret por Basic Auth al token endpoint.
 
 Para registrar tokens de Bedrock en otra lista DANA, configura `DANA_TOKEN_AUDIT_PROJECT_ID` con el ProjectID de esa conversación/lista. La Lambda llama:
 
@@ -97,7 +99,7 @@ Para actualizar el registro existente se usa Trigger con el `dataId`/`dana` reci
 POST /event/Trigger?dana={dataId}&CAMPO=valor
 ```
 
-`TOMADOR_ID` no se usa como llave de actualización. Si Data Retrieval entrega `UID`, la Lambda lo transporta como `recordUid` y lo escribe en logs para verificar que el intento y la actualización pertenecen a la misma fila DANA.
+`TOMADOR_ID` no se usa como llave de actualización. Data Retrieval devolvió `UID_VALIDOC` tras el Update `idRow`; la Lambda lo transporta como `recordUid` y lo registra para relacionar el intento con la fila DANA.
 
 La carga se bloquea si el registro actual está completado o si DynamoDB contiene un ítem `COMPLETED` para el mismo `TOMADOR_ID_KEY`. Si se abre un enlace de otra fila del mismo tomador, la Lambda escribe en esa fila `ESTADO_VALIDOC=COMPLETED` y copia `ADJUNTADOC1` desde DynamoDB. `TOMADOR_ID_COMPLETADO` sigue siendo un control legado de la LC de prueba.
 
@@ -154,4 +156,4 @@ La Lambda necesita permiso para invocar el modelo Sonnet configurado:
 
 ## Notas para producción
 
-El contador `_ATTEMPTS_CACHE` solo sirve como respaldo temporal durante el demo. El conteo definitivo debe venir de DANAconnect o de una persistencia backend, porque la memoria de Lambda no es confiable entre invocaciones concurrentes o ambientes fríos.
+El contador `_ATTEMPTS_CACHE` solo sirve como respaldo temporal. El conteo definitivo debe venir de DANAconnect o de una persistencia backend, porque la memoria de Lambda no es confiable entre invocaciones concurrentes o ambientes fríos.

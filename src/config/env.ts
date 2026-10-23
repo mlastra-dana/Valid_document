@@ -25,6 +25,6 @@ export const env: AppEnv = {
   appName:
     import.meta.env.VITE_APP_NAME?.trim() ||
     "Portal Validoc",
-  maxFileSizeMb: readPositiveNumber(import.meta.env.VITE_MAX_FILE_SIZE_MB, 10),
+  maxFileSizeMb: readPositiveNumber(import.meta.env.VITE_MAX_FILE_SIZE_MB, 3),
   requestTimeoutMs: readPositiveNumber(import.meta.env.VITE_REQUEST_TIMEOUT_MS, 30000)
 };

@@ -47,6 +47,19 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(result["statusCode"], 403)
         retrieve.assert_not_called()
 
+    def test_log_paths_do_not_include_dana_token(self):
+        secret = "dana-secret-value"
+        self.assertEqual(app.safe_path_for_log(f"/expedientes/{secret}"), "/expedientes/{dana}")
+        self.assertEqual(app.safe_path_for_log(f"/expedientes/{secret}/resultado"), "/expedientes/{dana}/resultado")
+        self.assertEqual(
+            app.safe_path_for_log(f"https://appserv.danaconnect.com/api/1.0/rest/conversation/data/{secret}?fields=UID"),
+            "/api/1.0/rest/conversation/data/{dana}",
+        )
+        with patch.object(app, "log_event") as logged, patch.object(app, "retrieve_tomador", return_value=EXPEDIENTE):
+            app.lambda_handler(event("GET", f"/expedientes/{secret}", secret), None)
+        request_event = next(call for call in logged.call_args_list if call.args[0] == "request_received")
+        self.assertEqual(request_event.kwargs["path"], "/expedientes/{dana}")
+
     def test_get_accepts_matching_link(self):
         with patch.object(app, "retrieve_tomador", return_value=EXPEDIENTE):
             result = app.lambda_handler(event("GET", "/expedientes/dana-valid", "dana-valid"), None)

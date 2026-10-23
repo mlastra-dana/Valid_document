@@ -71,7 +71,7 @@ BEDROCK_REGION = os.environ.get("BEDROCK_REGION") or os.environ.get("AWS_REGION"
 BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0"
 )
-MAX_FILE_SIZE_BYTES = int(os.environ.get("MAX_FILE_SIZE_BYTES", str(10 * 1024 * 1024)))
+MAX_FILE_SIZE_BYTES = int(os.environ.get("MAX_FILE_SIZE_BYTES", str(3 * 1024 * 1024)))
 VALIDATION_PROOF_SECRET = os.environ.get("VALIDATION_PROOF_SECRET", "")
 VALIDATION_PROOF_TTL_SECONDS = 300
 VALIDOC_TABLE_NAME = os.environ.get("VALIDOC_TABLE_NAME", "").strip()
@@ -147,6 +147,12 @@ def get_method_and_path(event):
 
 def get_query_params(event):
     return event.get("queryStringParameters") or {}
+
+
+def safe_path_for_log(value):
+    path = urllib.parse.urlsplit(str(value or "")).path
+    path = re.sub(r"(/expedientes/)[^/]+", r"\1{dana}", path)
+    return re.sub(r"(/conversation/data/)[^/]+", r"\1{dana}", path)
 
 
 def get_bearer_token(event):
@@ -571,7 +577,7 @@ def send_request(request):
         error_body = error.read().decode("utf-8", errors="replace")[:500]
         log_event(
             "http_error",
-            url=urllib.parse.urlsplit(request.full_url).path,
+            url=safe_path_for_log(request.full_url),
             statusCode=error.code,
             bodyPreview=error_body,
         )
@@ -583,7 +589,7 @@ def send_request(request):
             raise AppError(409, "EXPEDIENTE_COMPLETED", "El expediente ya fue completado.")
         raise AppError(error.code, "DANA_SERVICE_ERROR", "DANAconnect no completó la solicitud.")
     except urllib.error.URLError:
-        log_event("url_error", url=urllib.parse.urlsplit(request.full_url).path)
+        log_event("url_error", url=safe_path_for_log(request.full_url))
         raise AppError(502, "DANA_SERVICE_ERROR", "No fue posible conectar con DANAconnect.")
 
 
@@ -1342,7 +1348,7 @@ def lambda_handler(event, context):
         log_event(
             "request_received",
             method=method,
-            path=path,
+            path=safe_path_for_log(path),
             queryKeys=list(get_query_params(event).keys()),
         )
         if method == "OPTIONS":
@@ -1378,7 +1384,6 @@ def lambda_handler(event, context):
                 {
                     "event": "unhandled_error",
                     "errorType": type(error).__name__,
-                    "message": str(error),
                 }
             )
         )

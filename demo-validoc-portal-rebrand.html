@@ -118,7 +118,7 @@ h3{color:var(--navy);font-size:17px;font-weight:650}
       <div class="icon">▣</div>
       <div>
        <h3>Formatos permitidos</h3>
-       <p class="copy" style="margin-top:4px;font-size:14px">PDF, JPG, JPEG o PNG. Tamaño máximo: 10 MB. Solo se permite un archivo.</p>
+       <p class="copy" style="margin-top:4px;font-size:14px">PDF, JPG, JPEG o PNG. Tamaño máximo: 3 MB. Solo se permite un archivo.</p>
       </div>
      </div>
 
@@ -335,8 +335,8 @@ function processRealFile(file){
   return;
  }
  const mb = file.size / (1024 * 1024);
- if(mb > 10){
-  alert("El archivo supera el tamaño máximo de 10 MB.");
+ if(mb > 3){
+  alert("El archivo supera el tamaño máximo de 3 MB.");
   return;
  }
  showSelectedDocument(`${file.name} · ${file.type || "archivo"} · ${mb.toFixed(1)} MB`, file.type.startsWith("image/"));

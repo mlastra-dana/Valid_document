@@ -43,7 +43,7 @@ export const validateDocumentFile = (file: File): FileValidationResult => {
   if (file.size > maxFileSizeBytes) {
     return {
       valid: false,
-      message: `El archivo supera el tamaño máximo permitido de ${env.maxFileSizeMb} MB.`
+      message: `El archivo supera el tamaño máximo permitido de ${env.maxFileSizeMb} MB. Selecciona un archivo más pequeño; no se consumió ningún intento.`
     };
   }
 

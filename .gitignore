@@ -32,3 +32,5 @@ serverless/
 __pycache__/
 *.py[cod]
 validoc-lambda.zip
+.playwright-cli/
+output/playwright/

@@ -1,6 +1,6 @@
 # Campos de la nueva lista de contactos Validoc
 
-Propuesta acordada para la lista de producción. Conservar exactamente estos códigos para el portal y el flujo DANA. Los valores iniciales de resultado y reintento pueden estar vacíos.
+Campos base propuestos para la lista de producción. Conservar estos códigos para el portal y el flujo DANA. Los valores iniciales de resultado pueden estar vacíos. Los campos de rondas adicionales de intentos siguen pendientes de decisión con el cliente.
 
 | Código | Origen y uso |
 | --- | --- |
@@ -17,9 +17,8 @@ Propuesta acordada para la lista de producción. Conservar exactamente estos có
 | `MOTIVOFALLO` | Último motivo legible de fallo. |
 | `DOCUMENTO_DETECTADO` | Identificador leído del documento. |
 | `NOMBRE_ARCHIVO_DOC` | Nombre del archivo recibido. |
-| `REINTENTO_VALIDOC` | Nueva autorización de una ronda adicional: vacío, `PENDIENTE` o `CONSUMIDO`. El flujo pone `PENDIENTE`; el portal lo consume una sola vez al reiniciar el contador. Requiere implementación en la Lambda. |
 | `UID_VALIDOC` | Copia del UID real de esta fila, escrita por el Update de DANA con la expresión `idRow`. En la LC de prueba coinciden `UID=1` con `UID_VALIDOC=1` y `UID=17` con `UID_VALIDOC=17`. No viene del TXT. |
 
-`UID` lo genera DANA y no se incluye en el TXT. En la prueba del 22 de octubre de 2026, Data Retrieval **no devolvió** ese UID aunque la Lambda lo solicitó; únicamente devolvió los campos de negocio del registro y un `requestID` que identifica la solicitud, no la fila. La captura de la LC comprueba que el Update sí puede copiar el UID a `UID_VALIDOC` en dos filas. Falta comprobar que Data Retrieval devuelva `UID_VALIDOC` antes de cerrar la trazabilidad de extremo a extremo. `TOMADOR_ID_COMPLETADO` se usó en la prueba manual y **no** se crea en esta lista: la consulta global se hará en DynamoDB.
+`UID` lo genera DANA y no se incluye en el TXT. Data Retrieval no devolvió `UID` ni `idrow` aunque la Lambda los solicitó; sí devolvió `UID_VALIDOC` después del Update. Una finalización nueva guardó ese UID en DynamoDB. `TOMADOR_ID_COMPLETADO` se usó en una prueba manual y **no** se crea en esta lista: la consulta global se hace en DynamoDB.
 
-Antes de activar la nueva LC, ajustar la configuración `DANA_DATA_FIELDS` para incluir `REINTENTO_VALIDOC` y `UID_VALIDOC`, excluir `TOMADOR_ID_COMPLETADO`, comprobar que Data Retrieval devuelve estos códigos y mapear los campos que escribe el External Trigger a la nueva lista. Crear la lista no activa por sí solo la lógica de DynamoDB o de reintentos.
+Antes de activar la nueva LC, configurar `DANA_DATA_FIELDS` para incluir `UID_VALIDOC` y excluir `TOMADOR_ID_COMPLETADO`; comprobar que Data Retrieval devuelve los campos y mapear los que escribe el External Trigger. `REINTENTO_VALIDOC` se agregaría solo si el cliente aprueba otra ronda de intentos y se implementa su control. Crear la lista no activa por sí solo esa lógica.

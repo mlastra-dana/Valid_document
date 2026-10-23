@@ -1,3 +1,4 @@
+import { env } from "../config/env";
 import type { ValidationReasonCode } from "../types/document";
 import { ApiError, type ApiErrorCode } from "../types/api";
 
@@ -37,7 +38,7 @@ export const mapApiError = (error: unknown): FriendlyError => {
     },
     FILE_TOO_LARGE: {
       title: "Archivo demasiado grande",
-      message: "El archivo supera el tamaño máximo permitido de 10 MB."
+      message: `El archivo supera el tamaño máximo permitido de ${env.maxFileSizeMb} MB. Selecciona un archivo más pequeño; no se consumió ningún intento.`
     },
     UNSUPPORTED_FILE: {
       title: "Formato no permitido",
