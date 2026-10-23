@@ -18,7 +18,7 @@ La integración principal y la prevención de doble carga **se probaron con la l
 | Protección de los endpoints de registro con prueba firmada del archivo, válida cinco minutos | Cubierta por pruebas locales; el despliegue anterior ya permitió el flujo de carga. |
 | CORS | La captura de AWS confirma `CORS_ORIGIN=https://ms.validoc.danaconnect.us`; el portal pudo consultar la API. |
 | Ajustes de interfaz y seguridad recientes | Retirada la referencia interna y el texto final innecesario; el código local oculta el token `dana` en las rutas registradas en nuevos logs. Su publicación depende del despliegue de la responsable del proyecto. |
-| Tamaño de archivo | El código local limita PDF/JPG/JPEG/PNG a 3 MB sin modificar el archivo; si es mayor, avisa antes de enviarlo y no consume intento. Falta desplegarlo y probar el límite en el portal. |
+| Tamaño de archivo | El código limita PDF/JPG/JPEG/PNG a 3 MB sin modificar el archivo. Con un PDF de 3.641.327 bytes, el portal local y el desplegado mostraron el error de tamaño. En el portal desplegado el contador permaneció en 2 de 3 y el navegador no hizo una solicitud de validación. Falta repetirlo en el futuro flujo de producción. |
 
 ## Esquema actual
 
