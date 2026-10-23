@@ -22,6 +22,5 @@ export const SuccessResult = ({ result }: SuccessResultProps) => (
         <dd className="mt-1 text-mercantil-muted">{formatDateTime(result.completedAt)}</dd>
       </div>
     </dl>
-    <p className="mt-4 text-sm text-mercantil-muted">No se requieren más acciones.</p>
   </StatusCard>
 );
