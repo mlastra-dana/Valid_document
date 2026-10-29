@@ -4,7 +4,7 @@ Aplicación web React para que clientes o asesores de Mercantil Seguros complete
 
 ## Objetivo
 
-El portal recibe el parámetro `dana` de un enlace enviado por DANAconnect, consulta el expediente en la lista de contactos, permite cargar una cédula venezolana, valida el documento mediante Bedrock Sonnet, sube el archivo aprobado con File Upload API y actualiza el mismo registro DANA. DynamoDB conserva una entrada por tomador completado para impedir otra carga desde un registro duplicado. El portal no implementa autenticación propia: quien tenga el enlace válido puede abrirlo desde otro navegador.
+El portal recibe el parámetro `dana` de un enlace enviado por DANAconnect, consulta el expediente en la lista de contactos, permite cargar una cédula venezolana, valida el documento mediante Bedrock Sonnet, sube el archivo aprobado con File Upload API y actualiza el mismo registro DANA. DynamoDB conserva una entrada por tomador completado y otra por fila pendiente para controlar enlaces e intentos. El portal no implementa autenticación propia: quien tenga el enlace válido puede abrirlo desde otro navegador.
 
 ## Estado del portal
 
@@ -15,7 +15,7 @@ El flujo siguiente se probó con la lista DANA de pruebas. El paso a producción
 - Trazabilidad del `UID` único de la fila DANA como `recordUid`.
 - Validación de cédula venezolana por nacionalidad y número exactos contra `TOMADOR_ID`.
 - Carga de PDF, JPG, JPEG o PNG, con normalización backend del tipo real del archivo.
-- Límite actual de tres intentos por registro/enlace; la regla para conceder intentos nuevos tras un recordatorio está pendiente de decisión con el cliente.
+- Regla de tres intentos por ronda. Todos los enlaces válidos de la misma fila comparten el contador de DynamoDB. El flujo DANA marca `REINTENTO_VALIDOC=PENDIENTE` al enviar un recordatorio; la Lambda consume la marca una vez, reinicia los intentos y refleja el 0 en DANA.
 - Registro del último fallo conocido en DANA con motivo legible para operaciones.
 - File Upload a DANA solo cuando Bedrock valida correctamente el documento.
 - Actualización del mismo registro DANA mediante Trigger.
@@ -60,7 +60,7 @@ Fuera de alcance del flujo actual:
 ## Función Lambda y ambientes
 
 - **Código backend:** `lambda/index.py`; handler `index.lambda_handler`. La función de pruebas utilizada hasta ahora aparece como `Valid_document` en la consola compartida. Confirmar el nombre exacto en AWS antes de crear o cambiar recursos.
-- **Tabla:** `ms-validoc-prod`, clave `TOMADOR_ID_KEY`. `VALIDOC_STAGE=TEST` guarda `TEST#...`; `VALIDOC_STAGE=PROD` guarda `PROD#...` en la misma tabla. El valor es una configuración de toda la Lambda: el código no identifica automáticamente el ambiente de cada fila. Cada ítem completado conserva `TOMADOR_ID`, `UID`, `ESTADO_VALIDOC`, `ADJUNTADOC1`, fecha, resultado y datos del expediente; no contiene el archivo binario. Una escritura condicional impide reemplazar el primer completado.
+- **Tabla:** `ms-validoc-prod`, clave `TOMADOR_ID_KEY`. `VALIDOC_STAGE=TEST` guarda `TEST#...` y `ATTEMPTS#TEST#UID`; `VALIDOC_STAGE=PROD` guarda `PROD#...` y `ATTEMPTS#PROD#UID`. El valor es una configuración de toda la Lambda. Cada ítem completado conserva únicamente la clave normalizada del tomador, `UID`, `ESTADO_VALIDOC=COMPLETED`, `ADJUNTADOC1` y la fecha; no contiene el archivo binario ni datos de contacto. Cada ítem de intentos conserva el contador compartido de la fila, el estado de consumo del recordatorio y una versión para las escrituras condicionales. Estas protegen el primer completado y la reserva de cada intento.
 - **Nombre recomendado para una función real separada:** `ms-validoc-portal-prod`. `ms-prod` sería ambiguo entre proyectos. Conservar `Valid_document` para pruebas evita mezclar ambos flujos mientras se prepara producción. Este nombre es una propuesta; la nueva función no se ha creado.
 - **Paso a producción:** crear la nueva Lambda con el mismo código, configurar su propia Function URL, variables y permisos, y apuntar la compilación del portal real (`VITE_API_BASE_URL`) a esa URL. Probar una carga válida y una fallida en el flujo real antes de enviar correos reales. La URL nueva de la API no cambia por sí sola el dominio del portal que reciben los clientes.
 
@@ -243,7 +243,7 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_OAUTH_SCOPE=
-DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID,UID_VALIDOC
+DANA_DATA_FIELDS=ADJUNTADOC1,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,REINTENTO_VALIDOC,TOMADOR_ID,UID_VALIDOC
 DANA_FIELDS_QUERY_PARAM=fieldList
 DANA_OAUTH_AUTH_METHOD=basic
 DANA_CONVERSATION_DEBUG=0

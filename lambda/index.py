@@ -44,9 +44,9 @@ DANA_OAUTH_SCOPE = os.environ.get("DANA_OAUTH_SCOPE", "")
 DANA_DATA_FIELDS = os.environ.get(
     "DANA_DATA_FIELDS",
     (
-        "ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,"
+        "ADJUNTADOC1,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,"
         "FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,"
-        "NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID,UID_VALIDOC"
+        "NOMBRE_ARCHIVO_DOC,PRODUCTO,REINTENTO_VALIDOC,TOMADOR_ID,UID_VALIDOC"
     ),
 )
 DANA_FIELDS_QUERY_PARAM = os.environ.get("DANA_FIELDS_QUERY_PARAM", "fieldList")
@@ -64,6 +64,7 @@ FIELD_FILE_ID = "ADJUNTADOC1"
 FIELD_UPDATED_AT = "FECHAULTIMOVALIDOC"
 FIELD_STATUS = "ESTADO_VALIDOC"
 FIELD_ATTEMPTS_USED = "INTENTOS_VALIDOC"
+FIELD_RETRY = "REINTENTO_VALIDOC"
 FIELD_DETECTED_DOCUMENT = "DOCUMENTO_DETECTADO"
 FIELD_FILE_NAME = "NOMBRE_ARCHIVO_DOC"
 
@@ -81,7 +82,6 @@ ALLOWED_CONTENT_TYPES = {"application/pdf", "image/jpeg", "image/png"}
 ALLOWED_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png"}
 
 _TOKEN_CACHE = {"access_token": "", "expires_at": 0}
-_ATTEMPTS_CACHE = {}
 DEFAULT_TOKEN_AUDIT_FIELD_MAP = {
     "lambdaName": "LAMBDA_NAME",
     "modelId": "MODEL_ID",
@@ -259,6 +259,134 @@ def validoc_table():
     return boto3.resource("dynamodb").Table(VALIDOC_TABLE_NAME)
 
 
+def attempt_key(record_uid):
+    if not str(record_uid or "").strip() or VALIDOC_STAGE not in {"TEST", "PROD"}:
+        raise AppError(503, "DYNAMO_CONFIG_ERROR", "No pudimos identificar la fila del expediente.")
+    return f"ATTEMPTS#{VALIDOC_STAGE}#{str(record_uid).strip()}"
+
+
+def get_attempt_item(record_uid):
+    try:
+        return validoc_table().get_item(
+            Key={"TOMADOR_ID_KEY": attempt_key(record_uid)}, ConsistentRead=True
+        ).get("Item")
+    except AppError:
+        raise
+    except Exception as error:
+        log_event("dynamo_attempt_read_failed", errorType=type(error).__name__)
+        raise AppError(503, "DYNAMO_SERVICE_ERROR", "No pudimos consultar los intentos del expediente.")
+
+
+def put_attempt_item(item, previous):
+    try:
+        if previous is None:
+            validoc_table().put_item(Item=item, ConditionExpression="attribute_not_exists(TOMADOR_ID_KEY)")
+        else:
+            validoc_table().put_item(
+                Item=item,
+                ConditionExpression="#v = :previous",
+                ExpressionAttributeNames={"#v": "VERSION"},
+                ExpressionAttributeValues={":previous": previous["VERSION"]},
+            )
+        return True
+    except AppError:
+        raise
+    except Exception as error:
+        if getattr(error, "response", {}).get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+            return False
+        log_event("dynamo_attempt_write_failed", errorType=type(error).__name__)
+        raise AppError(503, "DYNAMO_SERVICE_ERROR", "No pudimos actualizar los intentos del expediente.")
+
+
+def ensure_attempt_round(record_uid, dana_attempts, retry_marker):
+    """Keep one shared counter per DANA row, regardless of which valid link opens it."""
+    marker = normalize_status(retry_marker)
+    for _ in range(8):
+        previous = get_attempt_item(record_uid)
+        if previous is None:
+            item = {
+                "TOMADOR_ID_KEY": attempt_key(record_uid),
+                "INTENTOS_VALIDOC": min(max(parse_int(dana_attempts), 0), 3),
+                "RETRY_MARKER_STATE": "",
+                "VERSION": 1,
+            }
+            if put_attempt_item(item, None):
+                continue
+        elif "ACTIVE_LINK_HASH" in previous or "SEEN_LINK_HASHES" in previous:
+            item = {
+                "TOMADOR_ID_KEY": attempt_key(record_uid),
+                "INTENTOS_VALIDOC": int(previous["INTENTOS_VALIDOC"]),
+                "RETRY_MARKER_STATE": "",
+                "VERSION": int(previous["VERSION"]) + 1,
+            }
+            if put_attempt_item(item, previous):
+                continue
+        elif marker == "CONSUMIDO" and previous.get("RETRY_MARKER_STATE") == "PENDIENTE":
+            item = {
+                "TOMADOR_ID_KEY": attempt_key(record_uid),
+                "INTENTOS_VALIDOC": int(previous["INTENTOS_VALIDOC"]),
+                "RETRY_MARKER_STATE": "CONSUMIDO",
+                "VERSION": int(previous["VERSION"]) + 1,
+            }
+            if put_attempt_item(item, previous):
+                return item
+        elif marker == "PENDIENTE" and int(previous["INTENTOS_VALIDOC"]) >= 3 and previous.get("RETRY_MARKER_STATE") != "PENDIENTE":
+            item = {
+                "TOMADOR_ID_KEY": attempt_key(record_uid),
+                "INTENTOS_VALIDOC": 0,
+                "RETRY_MARKER_STATE": "PENDIENTE",
+                "VERSION": int(previous["VERSION"]) + 1,
+            }
+            if put_attempt_item(item, previous):
+                log_event("retry_round_started", recordUid=str(record_uid))
+                return item
+        else:
+            return previous
+    raise AppError(503, "DYNAMO_SERVICE_ERROR", "No pudimos actualizar los intentos del expediente.")
+
+
+def reserve_attempt(record_uid):
+    """Reserve a Bedrock call with an atomic compare-and-swap before invoking the model."""
+    for _ in range(8):
+        previous = get_attempt_item(record_uid)
+        if not previous or previous.get("RETRY_MARKER_STATE") == "PENDIENTE":
+            raise AppError(503, "DYNAMO_SERVICE_ERROR", "La ronda de intentos no está lista.")
+        used = int(previous["INTENTOS_VALIDOC"])
+        if used >= 3:
+            return {"used": 3, "remaining": 0, "maximum": 3, "reserved": False}
+        item = {
+            "TOMADOR_ID_KEY": attempt_key(record_uid),
+            "INTENTOS_VALIDOC": used + 1,
+            "RETRY_MARKER_STATE": previous.get("RETRY_MARKER_STATE", ""),
+            "VERSION": int(previous["VERSION"]) + 1,
+        }
+        if put_attempt_item(item, previous):
+            return {"used": used + 1, "remaining": 2 - used, "maximum": 3, "reserved": True}
+    raise AppError(503, "DYNAMO_SERVICE_ERROR", "No pudimos reservar un intento de validación.")
+
+
+def mirror_attempts_to_dana(data_id, record_uid, expected_used, status=None, retry_marker=None):
+    """Retry with the latest Dynamo value if another invocation advanced the counter."""
+    used = expected_used
+    for _ in range(3):
+        fields = {FIELD_ATTEMPTS_USED: str(used)}
+        if status is not None:
+            fields[FIELD_STATUS] = status
+        if retry_marker is not None:
+            fields[FIELD_RETRY] = retry_marker
+        update_dana_record(data_id, fields, record_uid)
+        current = get_attempt_item(record_uid)
+        if current is None:
+            raise AppError(503, "DYNAMO_SERVICE_ERROR", "No pudimos confirmar los intentos del expediente.")
+        latest = int(current["INTENTOS_VALIDOC"])
+        if latest == used:
+            return
+        used = latest
+        status = None
+        retry_marker = None
+    log_event("dana_attempt_mirror_retry_needed", recordUid=str(record_uid))
+
+
 def get_completed_item(tomador_id):
     if not VALIDOC_TABLE_NAME:
         return None
@@ -272,21 +400,15 @@ def get_completed_item(tomador_id):
     return item if item and is_completed_status(item.get("ESTADO_VALIDOC")) else None
 
 
-def save_completed_item(expediente, file_id, completed_at, detected_number="", file_name="", attempts_used=None):
+def save_completed_item(expediente, file_id, completed_at):
     if not VALIDOC_TABLE_NAME:
         return
     item = {
-        **expediente.get("_danaFields", {}),
         "TOMADOR_ID_KEY": dynamo_key(expediente["tomadorId"]),
-        "TOMADOR_ID": expediente["tomadorId"],
         "UID": expediente.get("recordUid", ""),
         "ESTADO_VALIDOC": "COMPLETED",
         "FECHAULTIMOVALIDOC": completed_at,
         "ADJUNTADOC1": file_id,
-        "DOCUMENTO_DETECTADO": detected_number or "",
-        "NOMBRE_ARCHIVO_DOC": file_name or "",
-        "INTENTOS_VALIDOC": expediente.get("intentosRealizados", 0) if attempts_used is None else attempts_used,
-        "MOTIVOFALLO": "",
     }
     try:
         validoc_table().put_item(Item=item, ConditionExpression="attribute_not_exists(TOMADOR_ID_KEY)")
@@ -832,7 +954,9 @@ def retrieve_tomador(tomador_id, portal_token):
     if "record" in body:
         log_event("data_retrieval_record_shape", shape=summarize_data_shape(body.get("record")))
 
-    expected_tomador_id = get_first_value(data, "TOMADOR_ID", "tomadorId", "TOMADORID") or tomador_id
+    expected_tomador_id = get_first_value(data, "TOMADOR_ID", "tomadorId", "TOMADORID")
+    if not expected_tomador_id:
+        raise AppError(503, "DANA_DATA_ERROR", "No pudimos identificar al tomador del expediente.")
     cedula_tomador = get_first_value(
         data,
         "CEDULA_TOMADOR",
@@ -879,15 +1003,8 @@ def retrieve_tomador(tomador_id, portal_token):
                 "INTENTOSREALIZADOS",
             )
         ),
-        "maximoIntentos": parse_int(
-            get_first_value(data, "maximoIntentos", "MAXIMOINTENTOS"),
-            3,
-        ),
+        "maximoIntentos": 3,
         "tomadorIdCompletado": tomador_id_completed_flag(data),
-        "_danaFields": {
-            field: str(get_first_value(data, field) or "")
-            for field in ("NOMBRETOMADOR", "CEDULA_TOMADOR", "EMAIL_TOMADOR", "TELEFONO_TOMADOR", "PRODUCTO")
-        },
     }
     if VALIDOC_TABLE_NAME:
         file_id = get_first_value(data, "ADJUNTADOC1", "RutaDoc", "CONSIGNADOC", "ConsignaDoc")
@@ -897,8 +1014,6 @@ def retrieve_tomador(tomador_id, portal_token):
                 expediente,
                 str(file_id),
                 str(get_first_value(data, "FECHAULTIMOVALIDOC") or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())),
-                str(get_first_value(data, "DOCUMENTO_DETECTADO") or ""),
-                str(get_first_value(data, "NOMBRE_ARCHIVO_DOC") or ""),
             )
             completed_item = get_completed_item(expected_tomador_id)
         if completed_item:
@@ -912,6 +1027,24 @@ def retrieve_tomador(tomador_id, portal_token):
                     FIELD_FILE_ID: completed_item["ADJUNTADOC1"],
                     FIELD_UPDATED_AT: completed_item.get("FECHAULTIMOVALIDOC", ""),
                 }, record_uid)
+        elif not expediente["expedienteCompletado"]:
+            retry_marker = normalize_status(get_first_value(data, FIELD_RETRY))
+            state = ensure_attempt_round(expediente["recordUid"], expediente["intentosRealizados"], retry_marker)
+            expediente["intentosRealizados"] = int(state["INTENTOS_VALIDOC"])
+            if state.get("RETRY_MARKER_STATE") == "PENDIENTE" and retry_marker != "CONSUMIDO":
+                mirror_attempts_to_dana(tomador_id, record_uid, 0, "PENDING", "CONSUMIDO")
+                confirmed = get_json(data_url, headers)
+                if (
+                    parse_int(get_first_value(confirmed, FIELD_ATTEMPTS_USED)) != 0
+                    or normalize_status(get_first_value(confirmed, FIELD_RETRY)) != "CONSUMIDO"
+                ):
+                    raise AppError(502, "DANA_SERVICE_ERROR", "No pudimos confirmar la nueva ronda de intentos.")
+                state = ensure_attempt_round(expediente["recordUid"], 0, "CONSUMIDO")
+            elif expediente["intentosRealizados"] != parse_int(get_first_value(data, FIELD_ATTEMPTS_USED)):
+                mirror_attempts_to_dana(
+                    tomador_id, record_uid, expediente["intentosRealizados"],
+                    "PENDING" if expediente["intentosRealizados"] == 0 else "VALIDATION_FAILED",
+                )
     log_event(
         "expediente_extracted",
         dataIdPreview=preview_value(tomador_id),
@@ -1095,19 +1228,9 @@ def upload_document(payload):
 
 
 def get_attempts(tomador_id, expediente, increment=False):
-    current = _ATTEMPTS_CACHE.get(tomador_id, int(expediente.get("intentosRealizados") or 0))
-    maximum = int(expediente.get("maximoIntentos") or 3)
-    used = min(current + 1, maximum) if increment else current
-    _ATTEMPTS_CACHE[tomador_id] = used
-    return {"used": used, "remaining": max(maximum - used, 0), "maximum": maximum}
-
-
-def get_attempts_from_payload(data_id, payload, increment=False):
-    expediente = {
-        "intentosRealizados": int(payload.get("attemptsUsed") or 0),
-        "maximoIntentos": int(payload.get("maxAttempts") or 3),
-    }
-    return get_attempts(data_id, expediente, increment)
+    current = int(expediente.get("intentosRealizados") or 0)
+    used = min(current + 1, 3) if increment else current
+    return {"used": used, "remaining": max(3 - used, 0), "maximum": 3}
 
 
 def bedrock_client():
@@ -1237,6 +1360,12 @@ def handle_validate_document(portal_token, payload):
     if attempts_before["remaining"] <= 0:
         return validation_response("MAX_ATTEMPTS_REACHED", attempts=attempts_before, status_code=429)
 
+    attempts = reserve_attempt(expediente["recordUid"]) if VALIDOC_TABLE_NAME else get_attempts(data_id, expediente, increment=True)
+    if not attempts.get("reserved", True):
+        return validation_response("MAX_ATTEMPTS_REACHED", attempts=attempts, status_code=429)
+    if VALIDOC_TABLE_NAME:
+        mirror_attempts_to_dana(data_id, expediente["recordUid"], attempts["used"])
+
     log_event(
         "validation_context_ready",
         dataIdPreview=preview_value(data_id),
@@ -1280,7 +1409,6 @@ def handle_validate_document(portal_token, payload):
         validation,
         token_usage,
     )
-    attempts = get_attempts(data_id, expediente, increment=True)
     proof = make_validation_proof(data_id, expediente, payload["document"], validation, attempts)
     return response(200, {"success": True, "validation": validation, "attempts": attempts, "validationProof": proof})
 
@@ -1294,8 +1422,8 @@ def handle_register_document(portal_token, payload):
     if expediente["expedienteCompletado"]:
         raise AppError(409, "EXPEDIENTE_COMPLETED", "El expediente ya fue completado.")
     claims = verify_validation_proof(payload, expediente, expected_valid=True)
-    if expediente["intentosRealizados"] >= expediente["maximoIntentos"]:
-        raise AppError(429, "MAX_ATTEMPTS_REACHED", "Máximo de intentos alcanzado.")
+    if claims["attemptsUsed"] < 1 or claims["attemptsUsed"] > expediente["intentosRealizados"]:
+        raise AppError(403, "INVALID_VALIDATION", "Este intento no fue reservado para el expediente.")
     verified_payload = {
         **payload,
         "tomadorId": expediente["tomadorId"],
@@ -1310,11 +1438,7 @@ def handle_register_document(portal_token, payload):
             expediente,
             result["documentId"],
             result["completedAt"],
-            claims["detectedDocumentNumber"],
-            verified_payload["document"]["fileName"],
-            claims["attemptsUsed"],
         )
-    _ATTEMPTS_CACHE.pop(payload.get("dataId") or payload["tomadorId"], None)
     return response(200, result)
 
 
@@ -1327,7 +1451,9 @@ def handle_register_failure(path, portal_token, payload):
     if expediente["expedienteCompletado"]:
         raise AppError(409, "EXPEDIENTE_COMPLETED", "El expediente ya fue completado.")
     claims = verify_validation_proof(payload, expediente, expected_valid=False)
-    if claims["attemptsUsed"] <= expediente["intentosRealizados"]:
+    if claims["attemptsUsed"] != expediente["intentosRealizados"] and VALIDOC_TABLE_NAME:
+        raise AppError(409, "STALE_VALIDATION", "Este intento ya fue reemplazado por otro.")
+    if claims["attemptsUsed"] <= expediente["intentosRealizados"] and not VALIDOC_TABLE_NAME:
         raise AppError(409, "STALE_VALIDATION", "Este intento ya fue registrado.")
     register_result(tomador_id, expediente["tomadorId"], {
         "reasonCode": claims["reasonCode"],
@@ -1337,7 +1463,6 @@ def handle_register_failure(path, portal_token, payload):
         "status": "VALIDATION_FAILED",
         "recordUid": expediente["recordUid"],
     })
-    _ATTEMPTS_CACHE.pop(tomador_id, None)
     return empty_response(204)
 
 

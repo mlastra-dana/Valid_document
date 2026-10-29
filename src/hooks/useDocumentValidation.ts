@@ -28,47 +28,12 @@ const processingMessages = [
   "Comparando los datos del tomador..."
 ];
 
-const attemptsStorageKey = (expediente: Expediente) =>
-  `validoc-attempts:${expediente.dataId || expediente.tomadorId}`;
-
 const initialAttempts = (expediente: Expediente): AttemptStatus => {
-  const fallback = {
+  return {
     used: expediente.intentosRealizados,
     remaining: Math.max(expediente.maximoIntentos - expediente.intentosRealizados, 0),
     maximum: expediente.maximoIntentos
   };
-
-  try {
-    const stored = window.sessionStorage.getItem(attemptsStorageKey(expediente));
-    if (!stored) return fallback;
-
-    const parsed = JSON.parse(stored) as Partial<AttemptStatus>;
-    const maximum = Number(parsed.maximum || expediente.maximoIntentos);
-    const used = Math.min(Number(parsed.used || 0), maximum);
-    return {
-      used,
-      remaining: Math.max(maximum - used, 0),
-      maximum
-    };
-  } catch {
-    return fallback;
-  }
-};
-
-const storeAttempts = (expediente: Expediente, attempts: AttemptStatus) => {
-  try {
-    window.sessionStorage.setItem(attemptsStorageKey(expediente), JSON.stringify(attempts));
-  } catch {
-    // Attempt persistence is best-effort; validation still works without it.
-  }
-};
-
-const clearStoredAttempts = (expediente: Expediente) => {
-  try {
-    window.sessionStorage.removeItem(attemptsStorageKey(expediente));
-  } catch {
-    // Nothing to clear if sessionStorage is unavailable.
-  }
 };
 
 export const useDocumentValidation = (expediente: Expediente, token: string) => {
@@ -165,7 +130,6 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         if (!isCurrentRun()) return;
 
         setAttempts(response.attempts);
-        storeAttempts(expediente, response.attempts);
         setValidationResult(response.validation);
 
         if (!response.validation.isValid) {
@@ -204,7 +168,6 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
         if (!isCurrentRun()) return;
 
         setRegistrationResult(registration);
-        clearStoredAttempts(expediente);
         setStatus("completed");
       } catch (caughtError) {
         if (!isCurrentRun()) return;
@@ -213,7 +176,6 @@ export const useDocumentValidation = (expediente: Expediente, token: string) => 
           setStatus("max-attempts");
           setAttempts((current) => {
             const next = { ...current, remaining: 0, used: current.maximum };
-            storeAttempts(expediente, next);
             return next;
           });
           return;

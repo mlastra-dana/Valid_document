@@ -24,11 +24,16 @@ class MemoryTable:
         item = self.items.get(Key["TOMADOR_ID_KEY"])
         return {"Item": item} if item else {}
 
-    def put_item(self, Item, ConditionExpression):
-        assert ConditionExpression == "attribute_not_exists(TOMADOR_ID_KEY)"
+    def put_item(self, Item, ConditionExpression, ExpressionAttributeNames=None, ExpressionAttributeValues=None):
         key = Item["TOMADOR_ID_KEY"]
-        if key in self.items:
-            raise ConditionalFailure()
+        if ConditionExpression == "attribute_not_exists(TOMADOR_ID_KEY)":
+            if key in self.items:
+                raise ConditionalFailure()
+        else:
+            assert ConditionExpression == "#v = :previous"
+            assert ExpressionAttributeNames == {"#v": "VERSION"}
+            if self.items.get(key, {}).get("VERSION") != ExpressionAttributeValues[":previous"]:
+                raise ConditionalFailure()
         self.items[key] = Item
 
 
@@ -121,8 +126,7 @@ class DynamoTests(unittest.TestCase):
         }
         expediente = {
             "tomadorId": "V-2457722", "dataId": "dana-original", "recordUid": "1",
-            "expedienteCompletado": False, "intentosRealizados": 0, "maximoIntentos": 3,
-            "_danaFields": {"NOMBRETOMADOR": "Maria"},
+            "expedienteCompletado": False, "intentosRealizados": 1, "maximoIntentos": 3,
         }
         proof = app.make_validation_proof("dana-original", expediente, document, app.validation_result("VALID_DOCUMENT", "V-2457722"), {"used": 1})
         payload = {"dataId": "dana-original", "tomadorId": "V-2457722", "recordUid": "1", "document": document, "validationProof": proof}
@@ -133,14 +137,137 @@ class DynamoTests(unittest.TestCase):
         self.assertEqual(result["statusCode"], 200)
         item = self.table.items["TEST#V2457722"]
         self.assertEqual(item["ESTADO_VALIDOC"], "COMPLETED")
-        self.assertEqual(item["INTENTOS_VALIDOC"], 1)
-        self.assertEqual(item["NOMBRETOMADOR"], "Maria")
+        self.assertEqual(item, {
+            "TOMADOR_ID_KEY": "TEST#V2457722",
+            "UID": "1",
+            "ESTADO_VALIDOC": "COMPLETED",
+            "FECHAULTIMOVALIDOC": "2026-10-22T16:00:00Z",
+            "ADJUNTADOC1": "s3://WS/original",
+        })
 
     def test_dynamo_read_failure_stops_flow(self):
         with patch.object(self.table, "get_item", side_effect=RuntimeError("unavailable")):
             with self.assertRaises(app.AppError) as error:
                 app.get_completed_item("V-2457722")
         self.assertEqual(error.exception.status_code, 503)
+
+    def test_new_dana_token_alone_cannot_open_round(self):
+        data = {"TOMADOR_ID": "V-2457722", "UID_VALIDOC": "7", "INTENTOS_VALIDOC": "3"}
+        with patch.object(app, "get_json", return_value={"record": data}), patch.object(
+            app, "update_dana_record", side_effect=lambda data_id, fields, record_uid=None: data.update(fields)
+        ) as update:
+            old = app.handle_get_expediente("/expedientes/old-link", "old-link")
+            new = app.handle_get_expediente("/expedientes/reminder-link", "reminder-link")
+        self.assertEqual(json.loads(old["body"])["data"]["intentosRealizados"], 3)
+        self.assertEqual(json.loads(new["body"])["data"]["intentosRealizados"], 3)
+        update.assert_not_called()
+
+    def test_reminder_marker_opens_one_shared_round(self):
+        data = {"TOMADOR_ID": "V-2457722", "UID_VALIDOC": "7", "INTENTOS_VALIDOC": "3"}
+        with patch.object(app, "get_json", return_value={"record": data}), patch.object(
+            app, "update_dana_record", side_effect=lambda data_id, fields, record_uid=None: data.update(fields)
+        ) as update:
+            app.handle_get_expediente("/expedientes/old-link", "old-link")
+            data["REINTENTO_VALIDOC"] = "PENDIENTE"
+            new = app.handle_get_expediente("/expedientes/reminder-link", "reminder-link")
+            old = app.handle_get_expediente("/expedientes/old-link", "old-link")
+        self.assertEqual(json.loads(new["body"])["data"]["intentosRealizados"], 0)
+        self.assertEqual(json.loads(old["body"])["data"]["intentosRealizados"], 0)
+        self.assertEqual(data["REINTENTO_VALIDOC"], "CONSUMIDO")
+        self.assertEqual(data["INTENTOS_VALIDOC"], "0")
+        self.assertEqual(update.call_count, 1)
+        self.assertEqual(self.table.items["ATTEMPTS#TEST#7"]["RETRY_MARKER_STATE"], "CONSUMIDO")
+
+    def test_reminder_round_waits_until_dana_confirms_reset(self):
+        data = {"TOMADOR_ID": "V-2457722", "UID_VALIDOC": "7", "INTENTOS_VALIDOC": "3", "REINTENTO_VALIDOC": "PENDIENTE"}
+        with patch.object(app, "get_json", return_value={"record": data}), patch.object(app, "update_dana_record"):
+            with self.assertRaises(app.AppError) as error:
+                app.retrieve_tomador("reminder-link", "reminder-link")
+        self.assertEqual(error.exception.status_code, 502)
+        self.assertEqual(self.table.items["ATTEMPTS#TEST#7"]["RETRY_MARKER_STATE"], "PENDIENTE")
+        with patch.object(app, "get_json", return_value={"record": data}), patch.object(
+            app, "update_dana_record", side_effect=lambda data_id, fields, record_uid=None: data.update(fields)
+        ):
+            expediente = app.retrieve_tomador("reminder-link", "reminder-link")
+        self.assertEqual(expediente["intentosRealizados"], 0)
+        self.assertEqual(self.table.items["ATTEMPTS#TEST#7"]["RETRY_MARKER_STATE"], "CONSUMIDO")
+
+    def test_atomic_reservation_stops_at_three(self):
+        app.ensure_attempt_round("7", 0, "")
+        results = [app.reserve_attempt("7") for _ in range(4)]
+        self.assertEqual([result["used"] for result in results], [1, 2, 3, 3])
+        self.assertFalse(results[-1]["reserved"])
+        self.assertEqual(self.table.items["ATTEMPTS#TEST#7"]["INTENTOS_VALIDOC"], 3)
+
+    def test_three_validations_then_marked_reminder_starts_one_new_round(self):
+        data = {"TOMADOR_ID": "V-2457722", "UID_VALIDOC": "7", "INTENTOS_VALIDOC": "0"}
+        document = {
+            "fileName": "cedula.pdf", "contentType": "application/pdf",
+            "contentBase64": base64.b64encode(b"%PDF-1.4 test").decode(),
+        }
+        payload = {"dataId": "initial-link", "tomadorId": "V-2457722", "recordUid": "7", "document": document}
+        validation = (app.validation_result("TOMADOR_MISMATCH", "V-0000000"), {})
+        with patch.object(app, "get_json", return_value={"record": data}), patch.object(
+            app, "update_dana_record", side_effect=lambda data_id, fields, record_uid=None: data.update(fields)
+        ), patch.object(app, "validate_with_bedrock", return_value=validation) as bedrock, patch.object(
+            app, "record_bedrock_token_usage"
+        ):
+            app.handle_get_expediente("/expedientes/initial-link", "initial-link")
+            results = [app.handle_validate_document("initial-link", payload) for _ in range(4)]
+            self.assertEqual([json.loads(result["body"])["attempts"]["used"] for result in results], [1, 2, 3, 3])
+            self.assertEqual(results[-1]["statusCode"], 429)
+            self.assertEqual(bedrock.call_count, 3)
+            self.assertEqual(data["INTENTOS_VALIDOC"], "3")
+            unmarked = app.handle_get_expediente("/expedientes/reminder-link", "reminder-link")
+            self.assertEqual(json.loads(unmarked["body"])["data"]["intentosRealizados"], 3)
+            data["REINTENTO_VALIDOC"] = "PENDIENTE"
+            reminder = app.handle_get_expediente("/expedientes/reminder-link", "reminder-link")
+            self.assertEqual(json.loads(reminder["body"])["data"]["intentosRealizados"], 0)
+            self.assertEqual(data["INTENTOS_VALIDOC"], "0")
+            old_link = app.handle_get_expediente("/expedientes/initial-link", "initial-link")
+            self.assertEqual(json.loads(old_link["body"])["data"]["intentosRealizados"], 0)
+            for _ in range(3):
+                app.reserve_attempt("7")
+            same_link = app.handle_get_expediente("/expedientes/initial-link", "initial-link")
+            self.assertEqual(json.loads(same_link["body"])["data"]["intentosRealizados"], 3)
+
+    def test_next_reminder_can_start_another_round(self):
+        app.ensure_attempt_round("7", 3, "")
+        state = app.ensure_attempt_round("7", 3, "PENDIENTE")
+        self.assertEqual(state["INTENTOS_VALIDOC"], 0)
+        app.ensure_attempt_round("7", 0, "CONSUMIDO")
+        for _ in range(3):
+            app.reserve_attempt("7")
+        state = app.ensure_attempt_round("7", 3, "PENDIENTE")
+        self.assertEqual(state["INTENTOS_VALIDOC"], 0)
+
+    def test_legacy_token_hashes_are_removed_from_attempt_item(self):
+        self.table.items["ATTEMPTS#TEST#7"] = {
+            "TOMADOR_ID_KEY": "ATTEMPTS#TEST#7", "ACTIVE_LINK_HASH": "old-hash",
+            "SEEN_LINK_HASHES": {"old-hash"}, "INTENTOS_VALIDOC": 2, "VERSION": 4,
+        }
+        state = app.ensure_attempt_round("7", 2, "")
+        self.assertEqual(state["INTENTOS_VALIDOC"], 2)
+        self.assertNotIn("ACTIVE_LINK_HASH", state)
+        self.assertNotIn("SEEN_LINK_HASHES", state)
+
+    def test_completed_tomador_does_not_create_attempt_round(self):
+        self.table.items["TEST#V2457722"] = {
+            "TOMADOR_ID_KEY": "TEST#V2457722", "ESTADO_VALIDOC": "COMPLETED",
+            "ADJUNTADOC1": "s3://WS/original",
+        }
+        data = {
+            "TOMADOR_ID": "V-2457722", "INTENTOS_VALIDOC": "3",
+            "ADJUNTADOC1": "s3://WS/original",
+            "ESTADO_VALIDOC": "COMPLETED",
+        }
+        with patch.object(app, "get_json", return_value={"record": data}), patch.object(
+            app, "update_dana_record"
+        ) as update:
+            result = app.handle_get_expediente("/expedientes/reminder-link", "reminder-link")
+        self.assertTrue(json.loads(result["body"])["data"]["expedienteCompletado"])
+        update.assert_not_called()
+        self.assertNotIn("ATTEMPTS#TEST#7", self.table.items)
 
 
 if __name__ == "__main__":

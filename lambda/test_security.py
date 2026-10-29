@@ -36,7 +36,6 @@ def event(method, path, bearer, body=None):
 
 class SecurityTests(unittest.TestCase):
     def setUp(self):
-        app._ATTEMPTS_CACHE.clear()
         self.secret = patch.object(app, "VALIDATION_PROOF_SECRET", "test-secret-not-for-production-at-least-32-bytes")
         self.secret.start()
         self.addCleanup(self.secret.stop)
@@ -104,7 +103,7 @@ class SecurityTests(unittest.TestCase):
             "dataId": "dana-valid", "tomadorId": "V-123456", "recordUid": "42",
             "document": DOCUMENT, "validationProof": proof,
         }
-        with patch.object(app, "retrieve_tomador", return_value=EXPEDIENTE), patch.object(
+        with patch.object(app, "retrieve_tomador", return_value={**EXPEDIENTE, "intentosRealizados": 1}), patch.object(
             app, "upload_document", return_value={"success": True, "documentId": "s3://WS/test"}
         ) as upload:
             result = app.lambda_handler(event("POST", "/documentos-identidad/registrar", "dana-valid", payload), None)

@@ -54,7 +54,7 @@ DANA_CLIENT_SECRET=
 DANA_USERNAME=
 DANA_PASSWORD=
 DANA_OAUTH_SCOPE=
-DANA_DATA_FIELDS=ADJUNTADOC1,CEDULA_TOMADOR,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,TELEFONO_TOMADOR,TOMADOR_ID,TOMADOR_ID_COMPLETADO,UID,UID_VALIDOC
+DANA_DATA_FIELDS=ADJUNTADOC1,DOCUMENTO_DETECTADO,EMAIL_TOMADOR,ESTADO_VALIDOC,FECHAULTIMOVALIDOC,INTENTOS_VALIDOC,MOTIVOFALLO,NOMBRETOMADOR,NOMBRE_ARCHIVO_DOC,PRODUCTO,REINTENTO_VALIDOC,TOMADOR_ID,UID_VALIDOC
 VALIDOC_TABLE_NAME=ms-validoc-prod
 VALIDOC_STAGE=TEST
 DANA_FIELDS_QUERY_PARAM=fieldList
@@ -68,7 +68,13 @@ BEDROCK_MODEL_ID=anthropic.claude-3-5-sonnet-20240620-v1:0
 MAX_FILE_SIZE_BYTES=3145728
 ```
 
-`VALIDOC_TABLE_NAME` habilita la consulta y escritura de completados en DynamoDB. `VALIDOC_STAGE` debe ser `TEST` en la función de pruebas y `PROD` en la función del flujo real; forma parte de `TOMADOR_ID_KEY` para separar los registros dentro de la misma tabla. Es una variable de toda la función, no una propiedad detectada por cada enlace. Si se configura la tabla y la consulta falla, la Lambda detiene el flujo para evitar una nueva carga sin comprobar duplicados. Como este proceso comienza con la nueva lista, no hay completados históricos que migrar al activar `PROD`.
+`VALIDOC_TABLE_NAME` habilita la consulta y escritura de completados y rondas de intentos en DynamoDB. `VALIDOC_STAGE` debe ser `TEST` en la función de pruebas y `PROD` en la función del flujo real; forma parte de `TOMADOR_ID_KEY` para separar los registros dentro de la misma tabla. Es una variable de toda la función, no una propiedad detectada por cada enlace. Si se configura la tabla y la consulta falla, la Lambda detiene el flujo. Como este proceso comienza con la nueva lista, no hay completados históricos que migrar al activar `PROD`.
+
+Un ítem completado guarda solo `TOMADOR_ID_KEY`, `UID` de la fila original, `ESTADO_VALIDOC=COMPLETED`, `ADJUNTADOC1` y `FECHAULTIMOVALIDOC`. Nombre, correo, teléfono, producto, número detectado, nombre del archivo y contador no se copian a este ítem. Un ítem de intentos guarda solo `TOMADOR_ID_KEY`, `INTENTOS_VALIDOC`, `RETRY_MARKER_STATE` y `VERSION` para controlar la ronda y las escrituras concurrentes.
+
+Para los recordatorios, DANA selecciona filas con `INTENTOS_VALIDOC=3` que sigan sin completar y escribe `REINTENTO_VALIDOC=PENDIENTE` al enviar el correo. Todos los enlaces válidos de la fila comparten el mismo contador de DynamoDB. Al abrir cualquiera, la Lambda consulta completados, consume la marca una sola vez mediante escritura condicional, refleja `INTENTOS_VALIDOC=0` y `REINTENTO_VALIDOC=CONSUMIDO` en DANA y verifica que ambos valores se hayan guardado. La tabla usa ítems `ATTEMPTS#TEST#UID` o `ATTEMPTS#PROD#UID`, además de los completados.
+
+El token `dana` no se guarda en DynamoDB: la prueba integral mostró que puede cambiar al reabrir un correo. Un enlace anterior todavía vigente puede usar la ronda nueva, pero no genera intentos adicionales; esto coincide con la decisión de permitir que el cliente complete el expediente desde cualquiera de sus correos.
 
 Para Data Retrieval hay dos caminos:
 
@@ -156,4 +162,4 @@ La Lambda necesita permiso para invocar el modelo Sonnet configurado:
 
 ## Notas para producción
 
-El contador `_ATTEMPTS_CACHE` solo sirve como respaldo temporal. El conteo definitivo debe venir de DANAconnect o de una persistencia backend, porque la memoria de Lambda no es confiable entre invocaciones concurrentes o ambientes fríos.
+El contador efectivo reside en DynamoDB y cada reserva de intento usa una escritura condicional antes de invocar Bedrock. No hay contador en memoria de Lambda. DANA conserva una copia del valor para el flujo de recordatorios; comprobar esa sincronización en pruebas integrales.
